@@ -1,36 +1,188 @@
 {
-    "name": "Clock",
-    "label": "Clock Widget",
+    // ───────────────────────────────────────────────────────────────
+    // Basic Widget Metadata
+    // ───────────────────────────────────────────────────────────────
+    "name": "Clock",                          
+    "id": "clock-widget",                               // unique, lowercase identifier (recommended)
+    "description": "Clock Display",
+    "author": "Ico2",
+    "version": "1.0.0",
     "enabled": true,
+
+
+    // ───────────────────────────────────────────────────────────────
+    // Backend Behavior & Permissions
+    // ───────────────────────────────────────────────────────────────
+    "permissions": {
+        "keyboard": false,                       // needs global key events?
+        "filesystem": false,                     // needs file I/O?
+        "network": false,                        // needs HTTP requests?
+        "overlay": true,                         // appears above applications
+        "exclusiveHotkeys": false                // can override global hotkeys?
+    },
+
+
+    // ───────────────────────────────────────────────────────────────
+    // Files + Asset Bundles
+    // ───────────────────────────────────────────────────────────────
     "files": {
         "html": "widget.html",
         "css": "widget.css",
         "js": "widget.js",
-        "settings": " settings.html"
+        "settings": "settings.html",
+
+        // Optional additional assets (images, sounds, JSON, etc.)
+        "assets": [
+            "assets/clock-background.png",
+            "assets/tick.wav"
+        ]
     },
-    "size": {
-        "width": 200,
-        "height": 100,
-        "scale": 1.0
+
+
+    // ───────────────────────────────────────────────────────────────
+    // Widget Behavior & Interaction
+    // ───────────────────────────────────────────────────────────────
+    "behavior": {
+        "draggable": true,
+        "resizable": false,
+        "clickThrough": false,
+        "focusable": false,
+
+        // Whether WidgetEngine should reload the widget when settings change
+        "hotReload": true,
+
+        // Lifecycle hooks WidgetEngine will call on widget.js
+        "lifecycle": {
+            "onInit": true,                     // widget.js exports: init(config)
+            "onDestroy": true,                  // widget.js exports: destroy()
+            "onSettingsUpdate": true,           // widget.js exports: update(config)
+            "onFocus": false,                   // widget.js exports: focus()
+            "onBlur": false,                    // widget.js exports: blur()
+            "onResize": false                   // widget.js exports: resize(w,h)
+        }
     },
-    "draggable": true,
-    "click-through": false,
-    "position": {
-        "x": 35,
-        "y": 431
+
+
+    // ───────────────────────────────────────────────────────────────
+    // Layout + Display Rules
+    // ───────────────────────────────────────────────────────────────
+    "display": {
+        "position": {
+            "x": 35,
+            "y": 431
+        },
+        "size": {
+            "width": 200,
+            "height": 100,
+            "scale": 1.0,
+            "adjustable": false
+        },
+
+        "monitor": "primary",            // "primary", index number, or "all"
+        "zIndex": 10,                    // layering inside WidgetEngine
+
+        // Layout mode for floating/mobile widgets
+        "anchor": "top-left"             // center, bottom-right, custom, etc.
     },
-    "config": {
-        "font": "Arial",
-        "fontSize": 24,
-        "fontSizeScaling": true,
-        "fontColor": "#FFFFFF",
-        "type": "digital",
-        "type2": "window",
-        "showSeconds": true,
-        "use24HourFormat": false,
-        "backgroundColor": "rgba(0, 0, 0, 0.5)",
-        "showDate": true,
-        "dateFormat": "MM/DD/YYYY",
-        "useRootVariables": true
+
+
+    // ───────────────────────────────────────────────────────────────
+    // Root-Level Styling / Theming
+    // ───────────────────────────────────────────────────────────────
+    "general_style": {
+        "useRootVariables": true,
+
+        "font": {
+            "family": "Arial",
+            "size": "24px",
+            "color": "#FFFFFF"
+        },
+        "border": {
+            "style": "solid",
+            "width": "2px",
+            "color": "#FFFFFF"
+        },
+        "background": {
+            "color": "#000000",
+            "alpha": 0.20
+        },
+
+        "animation": {
+            "enabled": false,
+            "type": "fade-in",           // expand, drop, zoom, etc.
+            "duration": 200              // ms
+        }
+    },
+
+
+    // ───────────────────────────────────────────────────────────────
+    // Widget-Specific Config (User editable)
+    // ───────────────────────────────────────────────────────────────
+    "unique_config": {
+        "style": {
+            "type": "digital",            // "digital" | "analog"
+            "frameStyle": "window",       // "window" | "floating"
+            "use24HourFormat": false,
+            "showSeconds": true,
+            "showDate": true,
+            "dateFormat": "MM/DD/YYYY"
+        }
+    },
+
+
+    // ───────────────────────────────────────────────────────────────
+    // Settings Schema (auto-build UI)
+    // ───────────────────────────────────────────────────────────────
+    // This allows WidgetEngine to generate settings UI dynamically
+    "settings_schema": {
+        "style.type": {
+            "label": "Clock Type",
+            "type": "select",
+            "options": ["digital", "analog"]
+        },
+        "style.use24HourFormat": {
+            "label": "Use 24h Format",
+            "type": "toggle"
+        },
+        "style.showSeconds": {
+            "label": "Show Seconds",
+            "type": "toggle"
+        },
+        "style.showDate": {
+            "label": "Show Date",
+            "type": "toggle"
+        },
+        "style.dateFormat": {
+            "label": "Date Format",
+            "type": "text",
+            "placeholder": "MM/DD/YYYY"
+        }
+    },
+
+
+    // ───────────────────────────────────────────────────────────────
+    // Internal Widget State (saved/restored automatically)
+    // ───────────────────────────────────────────────────────────────
+    "state": {
+        "lastPosition": { "x": 35, "y": 431 },
+        "lastScale": 1.0,
+        "internalClockOffset": 0
+    },
+
+
+    // Default state if no saved data exists
+    "default_state": {
+        "internalClockOffset": 0
+    },
+
+
+    // ───────────────────────────────────────────────────────────────
+    // Event Subscriptions (WidgetEngine emits)
+    // ───────────────────────────────────────────────────────────────
+    "subscriptions": {
+        "onTimeTick": true,               // fires every second
+        "onAppChange": false,             // active window changed
+        "onAudioUpdate": false,           // audio volume/input change
+        "onKeybind": false                // special keybind events
     }
 }

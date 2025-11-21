@@ -1,125 +1,25 @@
-# backend/api/WidgetAPI.py
 import os
-import json
-from flask import Blueprint, jsonify, send_from_directory, abort, request
-from jsonc_parser.parser import JsoncParser
 
-# --------------------------------------------
-# Paths
-# --------------------------------------------
+from flask import Blueprint, jsonify, send_from_directory, abort, request
+from json_parser import save_manifest, load_manifest
+from find_widgets import discover_widgets
+
+api = Blueprint("api", __name__)
+
+# Path Variables
 API_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(API_DIR)
 
 WIDGETS_DIR = os.path.join(BASE_DIR, "widgets")
 
-widgets_bp = Blueprint("widgets", __name__)
-
-# --------------------------------------------
-# JSONC loader (supports comments)
-# --------------------------------------------
-
-def load_manifest(path):
-    try:
-        manifest = JsoncParser.parse_file(path)
-        return manifest
-    except Exception as e:
-        print(f"[WidgetsAPI] Failed to load manifest {path}: {e}")
-        return None
-
-
-def save_manifest(path, updated_data):
-    """
-    Safely writes changes back into a JSONC file without destroying comments
-    or formatting. Only overwrites modified keys.
-    """
-    try:
-        # 1. Read the raw JSONC text
-        with open(path, "r", encoding="utf-8") as f:
-            raw = f.read()
-    except Exception as e:
-        print(f"[WidgetsAPI] Could not read original JSONC: {e}")
-        return False
-
-    # 2. Parse JSONC to get current structured data
-    try:
-        original = JsoncParser.parse_str(raw)
-    except Exception as e:
-        print(f"[WidgetsAPI] Could not parse JSONC: {e}")
-        return False
-
-    # 3. Recursively apply updates to original object
-    def merge(a, b):
-        for key, value in b.items():
-            if isinstance(value, dict) and key in a and isinstance(a[key], dict):
-                merge(a[key], value)
-            else:
-                a[key] = value
-        return a
-
-    merged = merge(original, updated_data)
-
-    # 4. Convert merged result to formatted JSON
-    formatted = json.dumps(merged, indent=4)
-
-    # 5. Replace JSON blocks inside the JSONC text intelligently
-    # We replace the entire object while keeping comments outside the root intact.
-    start = raw.find("{")
-    end = raw.rfind("}")
-
-    if start == -1 or end == -1:
-        print("[WidgetsAPI] Could not locate JSON root block in JSONC file")
-        return False
-
-    new_raw = raw[:start] + formatted + raw[end + 1:]
-
-    # 6. Save new JSONC content
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(new_raw)
-        return True
-    except Exception as e:
-        print(f"[WidgetsAPI] Could not write JSONC: {e}")
-        return False
-
-# --------------------------------------------
-# Discover widgets
-# --------------------------------------------
-def discover_widgets():
-    widgets = []
-
-    if not os.path.exists(WIDGETS_DIR):
-        return widgets
-
-    for folder in os.listdir(WIDGETS_DIR):
-        widget_path = os.path.join(WIDGETS_DIR, folder)
-        if not os.path.isdir(widget_path):
-            continue
-
-        manifest_path = os.path.join(widget_path, "manifest.jsonc")
-        if not os.path.exists(manifest_path):
-            print(f"[WidgetsAPI] No manifest found in: {folder}")
-            continue
-
-        manifest = load_manifest(manifest_path)
-        if not manifest:
-            continue
-
-        manifest["name"] = folder  # ensure folder name is the internal ID
-        widgets.append(manifest)
-        print(f"[WidgetsAPI] Registered widget: {folder}")
-    return widgets
-
-# --------------------------------------------
-# API ROUTES
-# --------------------------------------------
 
 # GET /api/widgets  → list all widgets
-@widgets_bp.route("/api/widgets")
+@api.route("/api/widgets")
 def api_widgets():
     return jsonify(discover_widgets())
 
 # POST /api/widgets/<widget_name> → update manifest
-@widgets_bp.route("/api/widgets/<widget_name>", methods=["POST"])
+@api.route("/api/widgets/<widget_name>", methods=["POST"])
 def update_widget_manifest(widget_name):
     folder = os.path.join(WIDGETS_DIR, widget_name)
     manifest_path_json = os.path.join(folder, "manifest.json")
@@ -144,7 +44,7 @@ def update_widget_manifest(widget_name):
     return jsonify(updated), 200
 
 # PATCH /api/widgets/<widget>/<setting> → update single setting
-@widgets_bp.route("/api/widgets/<widget>/<setting>", methods=["PATCH", "OPTIONS"])
+@api.route("/api/widgets/<widget>/<setting>", methods=["PATCH", "OPTIONS"])
 def update_widget_setting(widget, setting):
     if request.method == "OPTIONS":
         return ("", 204)
@@ -210,7 +110,7 @@ def update_widget_setting(widget, setting):
     }), 200
 
 # GET /widgets/<widgetName>/<path:filename>
-@widgets_bp.route("/widgets/<widget_name>/<path:filename>")
+@api.route("/widgets/<widget_name>/<path:filename>")
 def serve_widget_assets(widget_name, filename):
     folder = os.path.join(WIDGETS_DIR, widget_name)
 

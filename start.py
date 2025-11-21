@@ -1,7 +1,6 @@
-import os
 from flask import Flask, jsonify, url_for, render_template
 from flask_cors import CORS
-from api.WidgetAPI import widgets_bp
+from api.api_routes import widgets_bp
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
