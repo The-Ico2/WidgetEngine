@@ -1,0 +1,36 @@
+{
+    "name": "Clock",
+    "label": "Clock Widget",
+    "enabled": true,
+    "files": {
+        "html": "widget.html",
+        "css": "widget.css",
+        "js": "widget.js",
+        "settings": " settings.html"
+    },
+    "size": {
+        "width": 200,
+        "height": 100,
+        "scale": 1.0
+    },
+    "draggable": true,
+    "click-through": false,
+    "position": {
+        "x": 35,
+        "y": 431
+    },
+    "config": {
+        "font": "Arial",
+        "fontSize": 24,
+        "fontSizeScaling": true,
+        "fontColor": "#FFFFFF",
+        "type": "digital",
+        "type2": "window",
+        "showSeconds": true,
+        "use24HourFormat": false,
+        "backgroundColor": "rgba(0, 0, 0, 0.5)",
+        "showDate": true,
+        "dateFormat": "MM/DD/YYYY",
+        "useRootVariables": true
+    }
+}

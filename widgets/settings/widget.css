@@ -1,0 +1,55 @@
+.widget-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.widget-box {
+    background-color: #1a1a1a;
+    border: 2px solid #444;
+    border-radius: 10px;
+    padding: 10px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100px;
+}
+
+.widget-box h3 {
+    margin: 0;
+    font-size: 16px;
+    text-align: center;
+}
+
+.widget-toggle {
+    margin-top: 10px;
+    padding: 5px;
+    text-align: center;
+    border: 2px solid red;
+    border-radius: 5px;
+    cursor: pointer;
+    user-select: none;
+    font-weight: bold;
+}
+
+.widget-toggle.enabled {
+    border-color: green;
+    color: #0f0;
+}
+
+.widget-toggle.disabled {
+    border-color: red;
+    color: #f00;
+}
+
+#settings-panel-content {
+    background-color: black;
+    width: 100%;
+    height: inherit;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 5;
+}

@@ -1,0 +1,15 @@
+/* Time */
+#clock-time {
+    font-weight: 600;
+    text-shadow: 0 0 12px rgba(0,0,0,0.45);
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+
+/* Date */
+#clock-date {
+    font-size: 0.55em;
+    opacity: 0.85;
+    text-shadow: 0 0 8px rgba(0,0,0,0.4);
+    white-space: nowrap;
+}

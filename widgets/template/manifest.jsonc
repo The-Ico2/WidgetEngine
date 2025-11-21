@@ -1,0 +1,46 @@
+{
+    "name": "Template",
+    "label": "Widget Template",
+    "enabled": true,
+    "files": {
+        "html": "widget.html",
+        "css": [
+            "widget.css"
+        ],
+        "js": [
+            "widget.js"
+        ]
+    },
+    "size": {
+        "width": 200,
+        "height": 100,
+        "scale": 1.0
+    },
+    "draggable": true,
+    "click-through": false,
+    "position": {
+        "x": 60,
+        "y": 3
+    },
+    "config": {
+        "useRootVariables": true,
+        "font": "Arial",
+        "fontSize": 24,
+        "fontSizeScaling": true,
+        "fontColor": "#FFFFFF",
+        "backgroundColor": "rgba(0, 0, 0, 0.5)",
+        "type": "digital",
+        "type2": "window",
+        "showSeconds": true,
+        "use24HourFormat": false,
+        "showDate": true,
+        "dateFormat": "MM/DD/YYYY",
+        "opacity": 1.0,
+        "borderColor": "#FFFFFF",
+        "borderWidth": 0,
+        "animationEnabled": true,
+        "refreshRate": 1000,
+        "shadow": true,
+        "cornerRadius": 0
+    }
+}
