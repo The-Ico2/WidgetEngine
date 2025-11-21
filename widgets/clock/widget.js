@@ -1,3 +1,5 @@
+// clock widget.js
+
 (function () {
     let root, timeEl, dateEl;
     let manifest, config;

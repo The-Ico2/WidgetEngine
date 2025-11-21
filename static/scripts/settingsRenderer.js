@@ -1,10 +1,13 @@
+// settingsRenderer.js
+
 window.SettingsRenderer = {
     async renderWidgetSettings(widgetName, container) {
 
         container.innerHTML = "";
 
         // Load manifest
-        const manifest = await fetch(`${BACKEND_URL}/api/widgets/${widgetName}`).then(r => r.json());
+        const res = await fetch(`/widgets/${widgetName}/manifest.jsonc`);
+        const manifest = await res.json();
 
         const title = document.createElement("h2");
         title.textContent = manifest.label;

@@ -7,8 +7,6 @@
     "description": "Clock Display",
     "author": "Ico2",
     "version": "1.0.0",
-    "enabled": true,
-
 
     // ───────────────────────────────────────────────────────────────
     // Backend Behavior & Permissions
@@ -29,7 +27,6 @@
         "html": "widget.html",
         "css": "widget.css",
         "js": "widget.js",
-        "settings": "settings.html",
 
         // Optional additional assets (images, sounds, JSON, etc.)
         "assets": [
@@ -43,13 +40,10 @@
     // Widget Behavior & Interaction
     // ───────────────────────────────────────────────────────────────
     "behavior": {
+        "enabled": true,
         "draggable": true,
-        "resizable": false,
+        
         "clickThrough": false,
-        "focusable": false,
-
-        // Whether WidgetEngine should reload the widget when settings change
-        "hotReload": true,
 
         // Lifecycle hooks WidgetEngine will call on widget.js
         "lifecycle": {
@@ -69,33 +63,29 @@
     "display": {
         "position": {
             "x": 35,
-            "y": 431
+            "y": 431,
+            "zIndex": 10
         },
         "size": {
             "width": 200,
             "height": 100,
             "scale": 1.0,
-            "adjustable": false
-        },
-
-        "monitor": "primary",            // "primary", index number, or "all"
-        "zIndex": 10,                    // layering inside WidgetEngine
-
-        // Layout mode for floating/mobile widgets
-        "anchor": "top-left"             // center, bottom-right, custom, etc.
+            "resizable": false
+        }
     },
 
 
     // ───────────────────────────────────────────────────────────────
     // Root-Level Styling / Theming
     // ───────────────────────────────────────────────────────────────
-    "general_style": {
+    "styling": {
         "useRootVariables": true,
 
         "font": {
             "family": "Arial",
             "size": "24px",
-            "color": "#FFFFFF"
+            "color": "#FFFFFF",
+            "widgetScaling": false
         },
         "border": {
             "style": "solid",

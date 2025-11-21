@@ -1,4 +1,5 @@
 // widgetWatcher.js
+
 const savedManifests = {};
 
 function ensureWidgetRoot(widget) {

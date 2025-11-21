@@ -16,8 +16,8 @@
     "draggable": true,
     "click-through": false,
     "position": {
-        "x": 66,
-        "y": 193
+        "x": 122,
+        "y": 187
     },
     "config": {
         "font": "Arial",

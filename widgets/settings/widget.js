@@ -18,34 +18,7 @@
         Update.widget(root, manifest);
 
         // Use Utils to load all widgets dynamically
-        window.Utils.loadSettingsWidgets(grid, openWidgetSettings);
-    }
-
-    /* ---------------------------
-       Open widget-specific settings
-    --------------------------- */
-
-    async function openWidgetSettings(widgetName) {
-        if (widgetName === "Keybinds") {
-            const { renderKeybindMenu } = await import('./extra/Keybinds/renderMenu.js');
-            const container = document.getElementById("settings-panel-content");
-            renderKeybindMenu(container);
-        }
-    }
-
-
-    function openWidgetSettings(widgetName) {
-        if (widgetName === "Root Variables") {
-            console.log("Open Root Variables panel");
-        } else if (widgetName === "General Settings") {
-            console.log("Open General Settings panel");
-        } else {
-            console.log(`Open settings for widget: ${widgetName}`);
-        }
-    }
-
-    function update() {
-        // No periodic update needed for settings widget
+        window.Utils.loadSettingsWidgets(grid);
     }
 
     window.WidgetInit = initWidget;

@@ -1,3 +1,5 @@
+// keybindManager.js
+
 window.KeybindManager = (() => {
     const keybinds = {}; // runtime callbacks
     let savedKeybinds = {}; // persisted { "Ctrl+Shift+S": "Settings" }

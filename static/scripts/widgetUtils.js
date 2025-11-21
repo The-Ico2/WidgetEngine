@@ -1,22 +1,32 @@
 // widgetUtils.js
+const widgetContainer = document.getElementById('#widget-container')
+if (!widgetContainer) {
+    console.error("#widget-container not found!");
+}
 
 window.Update = (() => {
     const Update = {
+
         /**
          * Update manifest and push changes to backend.
-         * Handles nested keys via dot notation.
-         * @param {HTMLElement} root - widget root element
-         * @param {Object} manifest - widget manifest object
-         * @param {string} widget - widget name
-         * @param {string} setting - setting key (supports nested: "config.fontColor")
-         * @param {*} value - new value
+         * Supports nested keys in dot notation (e.g., "unique_config.style.use24HourFormat").
+         * All API calls go through this method.
+         * @param {string} name - full widget manifest
+         * @param {string} path - widget id/name
+         * @param {object} value - dot-path key to update
          */
-        // ALL API CALLS MUST GO THROUGH UPDATE.MANIFEST
-        manifest: async function(root, manifest, widget, setting, value) {
-            if (!manifest || !root || !widget || !setting) return;
+        manifest: async function(name, path, value) {
+            if (!name || !path) return;
 
-            // Apply nested update to manifest
-            const keys = setting.split(".");
+            // 1. Get manifest from your global widget cache
+            const manifest = window.ActiveWidgets?.[name]?.manifest;
+            if (!manifest) {
+                console.error(`Manifest for ${name} not found`);
+                return;
+            }
+
+            // 2. Apply update locally using dot-notation
+            const keys = path.split(".");
             let target = manifest;
             for (let i = 0; i < keys.length - 1; i++) {
                 if (!(keys[i] in target)) target[keys[i]] = {};
@@ -24,243 +34,471 @@ window.Update = (() => {
             }
             target[keys[keys.length - 1]] = value;
 
-            // Apply update to widget live
-            this.widget(root, manifest);
-
-            // Prepare body for PATCH
-            let bodyData;
-            if (setting === "position" && typeof value === "object" && "x" in value && "y" in value) {
-                bodyData = { x: value.x, y: value.y };
-            } else {
-                bodyData = { value };
+            // 3. Apply DOM update if widget is currently rendered
+            if (window.Update?.widget) {
+                try {
+                    Update.widget(null, manifest);  
+                } catch (e) {
+                    console.warn("Widget live update skipped:", e);
+                }
             }
 
-            // Push change to backend
+            // 4. Push update to backend
             try {
-                console.log(`Attempting to update '${widget} Widget' '${setting}' to`, value);
-                const res = await fetch(`${BACKEND_URL}/api/widgets/${encodeURIComponent(widget)}/${encodeURIComponent(setting)}`, {
+                const res = await fetch(`${BACKEND_URL}/api/widgets/${encodeURIComponent(name)}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(bodyData)
+                    body: JSON.stringify({ path, value })
                 });
-                if (res.ok) console.log(`Successfully updated '${widget} Widget' '${setting}'`);
-                else console.error(`Failed to update '${widget} Widget' '${setting}':`, await res.text());
+
+                if (!res.ok)
+                    console.error(`Failed manifest update for ${name}/${path}:`, await res.text());
             } catch (err) {
-                console.error(`Error updating '${widget}' '${setting}':`, err);
+                console.error(`Error updating manifest for '${name}':`, err);
             }
         },
 
+
         /**
-         * Apply manifest to widget DOM live.
-         * Works for any setting in manifest. Calls Utils.apply* for standard updates.
+         * Apply manifest changes live to widget DOM.
          * @param {HTMLElement} root - widget root element
-         * @param {Object} manifest - widget manifest object
+         * @param {Object} manifest - full widget manifest
          */
         widget: function(root, manifest) {
             if (!root || !manifest) return;
 
-            // ENABLED STATE: create/remove DOM element
-            if ("enabled" in manifest) {
-                if (manifest.enabled) {
-                    if (!root.parentElement) document.body.appendChild(root);
-                    root.style.display = "block";
-                } else {
-                    if (root.parentElement) root.remove();
+            // ---------------- Behavior Rules ----------------
+            if (manifest.behavior) {
+                // Enabled
+                if ("enabled" in manifest) window.Apply.BehaviorRules(root, manifest, {}, "enabled");
+
+                // Draggable
+                if ("draggable" in manifest.behavior) window.Apply.BehaviorRules(root, manifest, {}, "draggable");
+
+                // Click-Through
+                if ("clickThrough" in manifest.behavior) window.Apply.BehaviorRules(root, manifest, {}, "clickThrough");
+
+                // Focusable
+                if ("focusable" in manifest.behavior) window.Apply.BehaviorRules(root, manifest, {}, "focusable");
+
+                // Lifecycle hooks (onInit already handled here)
+                if ("lifecycle" in manifest.behavior) window.Apply.BehaviorRules(root, manifest, {}, "lifecycle");
+            }
+
+            // ---------------- Display Rules ----------------
+            if (manifest.display) {
+                // Position
+                if (manifest.display.position) window.Apply.DisplayRules(root, manifest, {}, "position");
+
+                // Size / Scaling
+                if (manifest.display.size) window.Apply.DisplayRules(root, manifest, {}, "size");
+            }
+
+            // ---------------- Styling Rules ----------------
+            if (manifest.styling) {
+                window.Apply.StylingRules(root, manifest, {}, "useRootVariables");
+                window.Apply.StylingRules(root, manifest, {}, "font");
+                window.Apply.StylingRules(root, manifest, {}, "border");
+                window.Apply.StylingRules(root, manifest, {}, "background");
+                window.Apply.StylingRules(root, manifest, {}, "animation");
+            }
+
+            // ---------------- Unique Config ----------------
+            if (manifest.unique_config) {
+                for (const key in manifest.unique_config) {
+                    if (manifest.unique_config.hasOwnProperty(key)) {
+                        window.Apply.UniqueConfig(root, manifest, { value: manifest.unique_config[key] }, key);
+                    }
                 }
             }
-
-            // POSITION: runtime position (one-off)
-            if (manifest.position) {
-                window.Utils.applyPosition(root, manifest);
-            }
-
-            // CLICK-THROUGH
-            if ("click-through" in manifest) {
-                root.style.pointerEvents = manifest["click-through"] ? "none" : "auto";
-            }
-
-            // POSITION + DRAGGABLE combined
-            if ("position" in manifest) {
-                // Always apply runtime position
-                // If draggable, also enable dragging with delayed update
-                window.Utils.applyDraggablePosition(root, manifest, { draggable: !!manifest.draggable });
-            }
-
-            // SIZE & SCALING
-            if (manifest.size || manifest.config) {
-                window.Utils.applySizeAndScaling(root, manifest, manifest.config || {});
-            }
-
-            // VISUAL CONFIG
-            if (manifest.config) {
-                window.Utils.applyVisualConfig(root, manifest.config, manifest);
-            }
-
-            // FUTURE-PROOF: additional settings can be added and handled here as needed
         }
     };
 
     return Update;
 })();
 
-window.SettingsRenderer = (() => {
+window.Apply = (() => {
+    const Apply = {
+        BehaviorRules: function(root, manifest, config, type) {
+            try {
+                switch (type) {
+                    // ---------------- Enabled ----------------
+                    case "enabled":
+                        if (manifest.enabled === false) {
+                            if (root && root.parentNode) root.remove();
+                            return null;
+                        }
 
-    const renderWidgetSettings = async (widgetName, container) => {
-        try {
-            // Fetch manifest to get the settings.html path
-            const res = await fetch(`${BACKEND_URL}/api/widgets/${widgetName}`);
-            if (!res.ok) throw new Error(`Failed to load manifest for ${widgetName}`);
-            const manifest = await res.json();
+                        if (!root) {
+                            root = document.createElement("div");
+                            root.className = "widget-root";
+                            root.dataset.widget = manifest.name;
+                            widgetContainer.appendChild(root);
+                        }
 
-            if (!manifest.files || !manifest.files.settings) {
-                container.innerHTML = `<p>No settings page available for ${widgetName}</p>`;
-                return;
+                        return root;
+
+                    // ---------------- Draggable ----------------
+                    case "draggable":
+                        if (!root || !manifest?.display?.position) return;
+
+                        const draggable = manifest.behavior?.draggable ?? false;
+                        if (!draggable || root._draggableInitialized) return;
+
+                        // Apply initial position & styling
+                        root.style.position = "absolute";
+                        root.style.left = manifest.display.position.x + "px";
+                        root.style.top = manifest.display.position.y + "px";
+                        root.style.cursor = "grab";
+
+                        let offsetX = 0, offsetY = 0, dragging = false;
+                        let timeoutId = null;
+
+                        // Start drag
+                        root.addEventListener("mousedown", e => {
+                            dragging = true;
+                            offsetX = e.clientX - root.offsetLeft;
+                            offsetY = e.clientY - root.offsetTop;
+                            root.style.cursor = "grabbing";
+                            if (timeoutId) clearTimeout(timeoutId);
+                        });
+
+                        // Dragging
+                        document.addEventListener("mousemove", e => {
+                            if (!dragging) return;
+                            root.style.left = e.clientX - offsetX + "px";
+                            root.style.top = e.clientY - offsetY + "px";
+                        });
+
+                        // End drag & update manifest (debounced)
+                        document.addEventListener("mouseup", async () => {
+                            if (!dragging) return;
+                            dragging = false;
+                            root.style.cursor = "grab";
+
+                            if (timeoutId) clearTimeout(timeoutId);
+                            timeoutId = setTimeout(async () => {
+                                const x = parseInt(root.style.left);
+                                const y = parseInt(root.style.top);
+                                await Update.manifest(manifest.name, "display.position", { x, y });
+                            }, 500);
+                        });
+                        root._draggableInitialized = true;
+                        break;
+
+                    // ---------------- Click-Through ----------------
+                    case "clickThrough":
+                        if (!root || manifest.behavior?.clickThrough === undefined) return;
+                        root.style.pointerEvents = manifest.behavior.clickThrough ? "none" : "auto";
+                        value = root.style.pointerEvents
+
+                        break;
+
+                    // ---------------- Focusable ----------------
+                    case "focusable":
+                        if (!root || manifest.behavior?.focusable === undefined) return;
+                        if (manifest.behavior.focusable) {
+                            root.tabIndex = 0;
+                            root.addEventListener("focus", () => {
+                                if (window.WidgetFocus) window.WidgetFocus(manifest.name);
+                            });
+                            root.addEventListener("blur", () => {
+                                if (window.WidgetBlur) window.WidgetBlur(manifest.name);
+                            });
+                        } else {
+                            root.removeAttribute("tabIndex");
+                        }
+                        
+                        break;
+
+                    // ---------------- Lifecycle ----------------
+                    case "lifecycle":
+                        if (!root || !manifest.behavior?.lifecycle) return;
+
+                        const hooks = manifest.behavior.lifecycle;
+
+                        // Call onInit immediately if enabled
+                        if (hooks.onInit && window.WidgetInit) {
+                            try {
+                                window.WidgetInit(manifest, root);
+                            } catch (e) {
+                                console.error(`Error during onInit for widget ${manifest.name}:`, e);
+                            }
+                        }
+
+                        // Provide helper to call other lifecycle hooks externally
+                        root._callLifecycleHook = async function(hookName, config) {
+                            if (!hooks[hookName]) return;
+
+                            try {
+                                switch (hookName) {
+                                    case "onDestroy":
+                                        if (window.WidgetDestroy) await window.WidgetDestroy(manifest, root);
+                                        break;
+                                    case "onSettingsUpdate":
+                                        if (window.WidgetUpdate) await window.WidgetUpdate(manifest, config);
+                                        break;
+                                    case "onFocus":
+                                        if (window.WidgetFocus) await window.WidgetFocus(manifest, root);
+                                        break;
+                                    case "onBlur":
+                                        if (window.WidgetBlur) await window.WidgetBlur(manifest, root);
+                                        break;
+                                    case "onResize":
+                                        if (window.WidgetResize) await window.WidgetResize(manifest, root, config.width, config.height);
+                                        break;
+                                    default:
+                                        console.warn(`Unknown lifecycle hook: ${hookName}`);
+                                }
+                            } catch (err) {
+                                console.error(`Error during ${hookName} for widget ${manifest.name}:`, err);
+                            }
+                        };
+                        break;
+
+                    default:
+                        break;
+                }
+            } catch (e) {
+                console.error("applyBehaviorRules failed", e);
+            }
+        },
+
+        DisplayRules: function(root, manifest, config, type) {
+            try {
+                if (!root || !manifest?.display) return;
+
+                switch (type) {
+                    // ---------------- Position ----------------
+                    case "position": {
+                        const pos = manifest.display.position;
+                        if (!pos) return;
+
+                        root.style.position = "absolute";
+                        root.style.left = pos.x + "px";
+                        root.style.top = pos.y + "px";
+                        root.style.zIndex = pos.zIndex ?? 0; // default to 0 if undefined
+                        break;
+                    }
+
+                    // ---------------- Size / Scaling ----------------
+                    case "size": {
+                        const size = manifest.display.size;
+                        if (!size) return;
+
+                        if (size.resizable) {
+                            root.style.width = size.width + "px";
+                            root.style.height = size.height + "px";
+                            root.style.transform = `scale(${size.scale ?? 1})`;
+
+                            // Apply font scaling if enabled
+                            const fontScaling = manifest.general_style?.font?.widgetScaling;
+                            if (fontScaling) {
+                                const baseFontSize = config.fontSize ?? 24;
+                                root.style.fontSize = config.fontSizeScaling
+                                    ? baseFontSize * (size.scale ?? 1) + "px"
+                                    : baseFontSize + "px";
+                            }
+                        } else {
+                            console.warn(`Resizing is disabled for widget: ${root.dataset.widget}`);
+                        }
+                        break;
+                    }
+
+                    default:
+                        console.warn(`Unknown DisplayRules type: ${type}`);
+                        break;
+                }
+            } catch (e) {
+                console.error("applyDisplayRules failed", e);
+            }
+        },
+
+        StylingRules: function(root, manifest, config, type) {
+            try {
+                if (!root || !manifest?.styling) return;
+                const styling = manifest.styling;
+
+                switch (type) {
+
+                    // ---------------- Use Root CSS Variables ----------------
+                    case "useRootVariables":
+                        if (styling.useRootVariables) {
+                            // Example: set CSS variables for easy theming
+                            root.style.setProperty("--widget-font-family", styling.font.family);
+                            root.style.setProperty("--widget-font-size", styling.font.size);
+                            root.style.setProperty("--widget-font-color", styling.font.color);
+                            root.style.setProperty("--widget-border-style", styling.border.style);
+                            root.style.setProperty("--widget-border-width", styling.border.width);
+                            root.style.setProperty("--widget-border-color", styling.border.color);
+                            root.style.setProperty("--widget-bg-color", styling.background.color);
+                            root.style.setProperty("--widget-bg-alpha", styling.background.alpha);
+                        }
+                        break;
+
+                    // ---------------- Font ----------------
+                    case "font":
+                        if (styling.font) {
+                            root.style.fontFamily = styling.font.family;
+                            root.style.color = styling.font.color;
+                            
+                            // If widgetScaling is enabled, scale font size according to DisplayRules
+                            if (styling.font.widgetScaling && manifest.display?.size) {
+                                const scale = manifest.display.size.scale ?? 1;
+                                const baseFontSize = parseInt(styling.font.size) || 24;
+                                root.style.fontSize = (config.fontSizeScaling 
+                                    ? baseFontSize * scale 
+                                    : baseFontSize) + "px";
+                            } else {
+                                root.style.fontSize = styling.font.size;
+                            }
+                        }
+                        break;
+
+                    // ---------------- Border ----------------
+                    case "border":
+                        if (styling.border) {
+                            root.style.borderStyle = styling.border.style;
+                            root.style.borderWidth = styling.border.width;
+                            root.style.borderColor = styling.border.color;
+                        }
+                        break;
+
+                    // ---------------- Background ----------------
+                    case "background":
+                        if (styling.background) {
+                            const bgColor = styling.background.color || "#000000";
+                            const alpha = styling.background.alpha ?? 1;
+                            root.style.backgroundColor = `rgba(${hexToRgb(bgColor)}, ${alpha})`;
+                        }
+                        break;
+
+                    // ---------------- Animation ----------------
+                    case "animation":
+                        if (styling.animation && styling.animation.enabled) {
+                            root.style.transition = `all ${styling.animation.duration ?? 200}ms`;
+                            switch (styling.animation.type) {
+                                case "fade-in":
+                                    root.style.opacity = 0;
+                                    requestAnimationFrame(() => root.style.opacity = 1);
+                                    break;
+                                case "expand":
+                                    root.style.transform = "scale(0)";
+                                    requestAnimationFrame(() => root.style.transform = "scale(1)");
+                                    break;
+                                // Add other animation types as needed
+                                default:
+                                    break;
+                            }
+                        }
+                        break;
+
+                    default:
+                        console.warn(`Unknown StylingRules type: ${type}`);
+                        break;
+                }
+
+            } catch(e) {
+                console.error("applyStylingRules failed", e);
             }
 
-            container.innerHTML = `<h2>${manifest.label || manifest.name} Settings</h2>`;
+            // ---------------- Helper ----------------
+            function hexToRgb(hex) {
+                hex = hex.replace(/^#/, '');
+                if (hex.length === 3) {
+                    hex = hex.split('').map(h => h + h).join('');
+                }
+                const intVal = parseInt(hex, 16);
+                const r = (intVal >> 16) & 255;
+                const g = (intVal >> 8) & 255;
+                const b = intVal & 255;
+                return `${r}, ${g}, ${b}`;
+            }
+        },
 
-            // Fetch the widget's settings.html
-            const htmlRes = await fetch(`${BACKEND_URL}/widgets/${widgetName}/${manifest.files.settings}`);
-            if (!htmlRes.ok) throw new Error(`Failed to load settings.html for ${widgetName}`);
-            const html = await htmlRes.text();
 
-            const settingsContainer = document.createElement("div");
-            settingsContainer.innerHTML = html;
-            container.appendChild(settingsContainer);
+        UniqueConfig: function(root, manifest, config, type) {
+            try {
+                if (!manifest?.unique_config) return;
 
-        } catch (err) {
-            console.error(`Error rendering settings for widget ${widgetName}:`, err);
-            container.innerHTML = `<p>Error loading settings for ${widgetName}</p>`;
-        }
-    };
+                // type will represent the key or nested path, e.g., "style.showSeconds"
+                const keys = type.split(".");
+                let target = manifest.unique_config;
 
-    return { renderWidgetSettings };
+                // Traverse to the final property
+                for (let i = 0; i < keys.length - 1; i++) {
+                    if (!(keys[i] in target)) {
+                        Utils.sendError(`UniqueConfig key not found: ${keys.slice(0, i + 1).join(".")}`);
+                        return;
+                    }
+                    target = target[keys[i]];
+                }
+
+                const finalKey = keys[keys.length - 1];
+                if (!(finalKey in target)) {
+                    Utils.sendError(`UniqueConfig key not found: ${type}`);
+                    return;
+                }
+
+                // Update the value
+                target[finalKey] = config.value;
+
+                console.log(`UniqueConfig updated: ${type} =`, config.value);
+
+            } catch (e) {
+                console.error("applyUniqueConfig failed", e);
+                Utils.sendError(`Error updating UniqueConfig: ${e.message}`);
+            }
+        },
+
+    }
+
+    return Apply;
 })();
-
 
 window.Utils = (() => {
     const Utils = {
-        /* ------------------------------ POSITION ------------------------------ */
-        applyPosition: function(root, manifest) {
+        sendError: function(message, duration = 4000) {
             try {
-                const pos = manifest.position || { x: 40, y: 40 };
-                root.style.left = pos.x + "px";
-                root.style.top = pos.y + "px";
-                root.style.position = "absolute";
-            } catch (e) {
-                console.error("applyPosition failed", e);
+                // Create the error chip
+                const chip = document.createElement("div");
+                chip.className = "error-chip";
+                chip.textContent = message;
+
+                // Basic styles (can override with CSS if desired)
+                Object.assign(chip.style, {
+                    position: "fixed",
+                    bottom: "20px",
+                    right: "20px",
+                    backgroundColor: "rgba(255, 50, 50, 0.9)",
+                    color: "#fff",
+                    padding: "10px 15px",
+                    borderRadius: "5px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+                    zIndex: 9999,
+                    fontFamily: "sans-serif",
+                    fontSize: "14px",
+                    opacity: 0,
+                    transition: "opacity 0.3s ease"
+                });
+
+                document.body.appendChild(chip);
+
+                // Fade in
+                requestAnimationFrame(() => {
+                    chip.style.opacity = 1;
+                });
+
+                // Fade out and remove after duration
+                setTimeout(() => {
+                    chip.style.opacity = 0;
+                    chip.addEventListener("transitionend", () => chip.remove());
+                }, duration);
+            } catch (err) {
+                console.error("Utils.sendError failed:", err);
             }
         },
 
-        /* ------------------------------ SIZE & SCALING ------------------------------ */
-        applySizeAndScaling: function(root, manifest, config) {
-            try {
-                const s = manifest.size || { width: 200, height: 100, scale: 1.0 };
-                root.style.width = s.width + "px";
-                root.style.height = s.height + "px";
-                root.style.transform = `scale(${s.scale})`;
-
-                const fontSize = config.fontSize || 24;
-                root.style.fontSize = config.fontSizeScaling ? fontSize * s.scale + "px" : fontSize + "px";
-            } catch(e) {
-                console.error("applySizeAndScaling failed", e);
-            }
-        },
-
-        /* ------------------------------ VISUAL CONFIG ------------------------------ */
-        applyVisualConfig: function(root, config, manifest) {
-            try {
-                if (config.useRootVariables) {
-                    root.style.color = `var(--font=color, ${config.fontColor || "#FFF"})`;
-                    root.style.fontFamily = `var(--font-family, ${config.font || "Arial"})`;
-                } else {
-                    root.style.color = config.fontColor || "#FFF";
-                    root.style.fontFamily = config.font || "Arial";
-                }
-
-                root.style.backgroundColor = config.backgroundColor || "rgba(0,0,0,0.5)";
-            } catch(e) {
-                console.error("applyVisualConfig failed", e);
-            }
-        },
-
-        /* ------------------------------ POINTER EVENTS ------------------------------ */
-        applyPointerRules: function(root, manifest) {
-            try {
-                root.style.pointerEvents = manifest["click-through"] ? "none" : "auto";
-            } catch(e) {
-                console.error("applyPointerRules failed", e);
-            }
-        },
-
-        /* ------------------------------ DRAGGING & POSITIONING ------------------------------ */
-        applyDraggablePosition: function(root, manifest, options = { draggable: true }) {
-            if (!root || !manifest || !manifest.position) return;
-
-            // Always apply position
-            root.style.left = manifest.position.x + "px";
-            root.style.top = manifest.position.y + "px";
-            root.style.position = "absolute";
-
-            if (!options.draggable) return; // exit if only applying position
-
-            if (root._draggableInitialized) return;
-
-            let offsetX = 0, offsetY = 0, dragging = false;
-            let timeoutId = null;
-
-            root.addEventListener("mousedown", e => {
-                dragging = true;
-                offsetX = e.clientX - root.offsetLeft;
-                offsetY = e.clientY - root.offsetTop;
-                if (timeoutId) clearTimeout(timeoutId); // reset patch timer
-            });
-
-            document.addEventListener("mousemove", e => {
-                if (!dragging) return;
-                root.style.left = e.clientX - offsetX + "px";
-                root.style.top = e.clientY - offsetY + "px";
-            });
-
-            document.addEventListener("mouseup", async () => {
-                if (!dragging) return;
-                dragging = false;
-
-                // Delay patching to manifest by 5s
-                if (timeoutId) clearTimeout(timeoutId);
-                timeoutId = setTimeout(async () => {
-                    const x = parseInt(root.style.left);
-                    const y = parseInt(root.style.top);
-
-                    Update.manifest(root, manifest, manifest.name, "position", { x, y });
-                }, 5000);
-            });
-
-            root._draggableInitialized = true;
-        },
-
-        /* ------------------------------ ENABLED STATE ------------------------------ */
-        applyEnabled: function(root, manifest, containerEl) {
-            if (manifest.enabled === false) {
-                // Remove element if exists
-                if (root && root.parentNode) root.remove();
-                return null;
-            }
-
-            // Enabled: create element if not exists
-            if (!root) {
-                root = document.createElement("div");
-                root.className = "widget-root";
-                root.dataset.widget = manifest.name;
-
-                // Append to container
-                if (containerEl) containerEl.appendChild(root);
-            }
-
-            return root; // return the created/found root for further updates
-        },
-
-        /* ------------------------------ LOAD ALL ENABLED WIDGETS INTO DOM ------------------------------ */
         loadDOMWidgets: async function(container = document.body) {
             try {
                 const widgets = await fetch(`${BACKEND_URL}/api/widgets`).then(r => r.json());
@@ -319,7 +557,6 @@ window.Utils = (() => {
             }
         },
         
-        /* ------------------------------ LOAD WIDGETS FOR SETTINGS PANEL ------------------------------ */
         loadSettingsWidgets: async function(gridEl) {
             try {
                 // Fetch all real widgets from backend
@@ -372,7 +609,7 @@ window.Utils = (() => {
                                 await Utils.deleteWidget(entry.name);
                             }
 
-                            await Update.manifest(null, entry, entry.name, "enabled", newState);
+                            await Update.manifest(null, entry, entry.name, "behavior.enabled", newState);
                         });
 
                         box.appendChild(toggle);
@@ -415,7 +652,6 @@ window.Utils = (() => {
             }
         },
         
-        /* ------------------------------ LOAD SINGLE WIDGET ------------------------------ */
         loadWidget: async function(widget, container = document.body) {
             if (!widget || !widget.enabled) return null;
 
@@ -504,8 +740,6 @@ window.Utils = (() => {
             return widgetRoot;
         },
 
-
-        /* ------------------------------ DELETE SINGLE WIDGET ------------------------------ */
         deleteWidget: async function(widgetName) {
             /* ---------------- Remove DOM Root ---------------- */
             const root = document.querySelector(`.widget-root[data-widget="${widgetName}"]`);
@@ -534,7 +768,6 @@ window.Utils = (() => {
             console.log(`Widget '${widgetName}' fully removed (DOM, scripts, styles).`);
         },
 
-        /* ------------------------------ DATE FORMATTER ------------------------------ */
         formatDate: function(date, config) {
             try {
                 const fmt = config.dateFormat || "MM/DD/YYYY";
@@ -550,7 +783,6 @@ window.Utils = (() => {
             }
         },
 
-        /* ------------------------------ WAIT FOR ROOT ------------------------------ */
         waitForRoot: function(selector, callback, retries = 10, delay = 50) {
             const root = document.querySelector(selector);
             if (root) {
@@ -564,4 +796,38 @@ window.Utils = (() => {
     };
 
     return Utils;
+})();
+
+window.SettingsRenderer = (() => {
+
+    const renderWidgetSettings = async (widgetName, container) => {
+        try {
+            // Fetch manifest to get the settings.html path
+            const res = await fetch(`${BACKEND_URL}/api/widgets/${widgetName}`);
+            if (!res.ok) throw new Error(`Failed to load manifest for ${widgetName}`);
+            const manifest = await res.json();
+
+            if (!manifest.files || !manifest.files.settings) {
+                container.innerHTML = `<p>No settings page available for ${widgetName}</p>`;
+                return;
+            }
+
+            container.innerHTML = `<h2>${manifest.label || manifest.name} Settings</h2>`;
+
+            // Fetch the widget's settings.html
+            const htmlRes = await fetch(`${BACKEND_URL}/widgets/${widgetName}/${manifest.files.settings}`);
+            if (!htmlRes.ok) throw new Error(`Failed to load settings.html for ${widgetName}`);
+            const html = await htmlRes.text();
+
+            const settingsContainer = document.createElement("div");
+            settingsContainer.innerHTML = html;
+            container.appendChild(settingsContainer);
+
+        } catch (err) {
+            console.error(`Error rendering settings for widget ${widgetName}:`, err);
+            container.innerHTML = `<p>Error loading settings for ${widgetName}</p>`;
+        }
+    };
+
+    return { renderWidgetSettings };
 })();
