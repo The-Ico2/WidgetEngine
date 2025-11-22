@@ -1,5 +1,47 @@
 // widgetUtils.js
 window.ActiveWidgets = {};
+// Track deleted widgets to make deleteWidget idempotent (prevents duplicate logs/actions)
+window._deletedWidgets = window._deletedWidgets || new Set();
+// Diagnostic: warn when any script assigns to `window.WidgetInit` (helps detect globals overwriting)
+(function(){
+    try {
+        if (!window.__widgetInitDiagInstalled) {
+            Object.defineProperty(window, '__widgetInitDiagInstalled', { value: true, configurable: false });
+            let current = window.WidgetInit;
+            Object.defineProperty(window, 'WidgetInit', {
+                configurable: true,
+                enumerable: true,
+                get() { return current; },
+                set(fn) {
+                    try {
+                        try {
+                            if (typeof Utils !== 'undefined' && Utils && typeof Utils.sendMessage === 'function') {
+                                const name = fn && fn.name ? fn.name : '<anonymous>';
+                                Utils.sendMessage('warn', `Diagnostic: window.WidgetInit assigned by a widget script. (${name})`, 6);
+                            } else {
+                                console.warn('Diagnostic: window.WidgetInit assigned by a widget script.', fn);
+                            }
+                        } catch (e) {
+                            try { console.warn('Diagnostic: window.WidgetInit assigned by a widget script.', fn); } catch (_) {}
+                        }
+                    } catch (e) {}
+                    current = fn;
+                }
+            });
+        }
+        } catch (e) {
+        // Don't break if defineProperty fails
+        try {
+            if (typeof Utils !== 'undefined' && Utils && typeof Utils.sendMessage === 'function') {
+                Utils.sendMessage('error', `Failed to install WidgetInit diagnostic: ${e}`, 6);
+            } else {
+                console.error('Failed to install WidgetInit diagnostic:', e);
+            }
+        } catch (_) {
+            try { console.error('Failed to install WidgetInit diagnostic:', e); } catch (_) {}
+        }
+    }
+})();
 const widgetContainer = document.getElementById('widget-container')
 if (!widgetContainer) {
     Utils.sendMessage("error", `#widget-container not found!`)
@@ -14,14 +56,44 @@ window.Update = (() => {
          * @param {string} path - widget id/name
          * @param {object} value - dot-path key to update
          */
-        manifest: async function(name, path, value) {
+        // Flexible Update.manifest wrapper
+        // Supports legacy call shapes used elsewhere in the codebase:
+        //  - Update.manifest(name, path, value)
+        //  - Update.manifest(null, manifestObj, widgetName, path, value)
+        //  - Update.manifest(manifestObj, widgetName, path, value)
+        manifest: async function(...args) {
+            // Normalize arguments into { name, path, value, manifest }
+            let name = null, path = null, value = undefined, manifest = null;
+
+            if (args.length === 3) {
+                // (name, path, value)
+                [name, path, value] = args;
+            } else if (args.length >= 4) {
+                // Could be (manifestObj, widgetName, path, value)
+                if (typeof args[0] === 'object' && args[0] !== null) {
+                    manifest = args[0];
+                    name = args[1] || manifest.name;
+                    path = args[2];
+                    value = args[3];
+                }
+
+                // Or (null, manifestObj, widgetName, path, value)
+                if (!manifest && args[0] === null && typeof args[1] === 'object' && args[1] !== null) {
+                    manifest = args[1];
+                    name = args[2] || manifest.name;
+                    path = args[3];
+                    value = args[4];
+                }
+            }
+
+            // Basic validation
             if (!name || !path) {
-                Utils.sendMessage("error", `Update.manifest called with invalid args: name=${name}, path=${path}`, 4, name)
+                Utils.sendMessage("error", `Update.manifest called with invalid args: name=${name}, path=${path}`, 4, name || null)
                 return;
             }
 
-            // 1. Get manifest from your global widget cache
-            const manifest = window.ActiveWidgets?.[name]?.manifest;
+            // If manifest wasn't provided, try the global cache
+            if (!manifest) manifest = window.ActiveWidgets?.[name]?.manifest;
             if (!manifest) {
                 Utils.sendMessage("error", `[widget:${name}] Manifest not found`, 4, name)
                 return;
@@ -39,7 +111,13 @@ window.Update = (() => {
             // 3. Apply DOM update if widget is currently rendered
             if (window.Update?.widget) {
                 try {
-                    Update.widget(null, manifest);
+                    const rootEl = document.querySelector(`.widget-root[data-widget="${name}"]`);
+                    if (rootEl) {
+                        Update.widget(rootEl, manifest);
+                    } else {
+                        // no root in DOM; skip live update but log debug
+                        Utils.sendMessage("debug", `Update.manifest: widget root not found for ${name}, skipping live DOM update`, 3, name);
+                    }
                 } catch (e) {
                     Utils.sendMessage("warn", `[widget:${name}] Widget live update skipped: ${e}`, 4, name)
                 }
@@ -222,13 +300,22 @@ window.Apply = (() => {
 
                         const hooks = manifest.behavior.lifecycle;
 
-                        // Call onInit immediately if enabled and not yet initialized
-                        if (hooks.onInit && window.WidgetInit && !root._initialized) {
-                            try {
-                                window.WidgetInit(manifest, root);
-                                root._initialized = true; // mark as initialized
-                            } catch (e) {
-                                Utils.sendMessage("error", `[widget:${manifest.name}] Error during onInit: ${e}`, 4, manifest.name);
+                        // Call onInit immediately if enabled and not yet initialized.
+                        // Mark the root as initialized BEFORE calling into the widget init
+                        // to prevent re-entrant Update.widget -> onInit -> Update.widget
+                        // recursion which can cause stack overflows. If init throws,
+                        // revert the flag so future attempts can retry.
+                        if (hooks.onInit && !root._initialized) {
+                            const initFn = resolveWidgetInit(manifest.name);
+                            if (initFn) {
+                                try {
+                                    root._initialized = true; // prevent re-entrancy
+                                    initFn(manifest, root);
+                                } catch (e) {
+                                    // revert initialized flag on failure and report
+                                    root._initialized = false;
+                                    Utils.sendMessage("error", `[widget:${manifest.name}] Error during onInit: ${e}`, 4, manifest.name);
+                                }
                             }
                         }
 
@@ -449,10 +536,8 @@ window.Apply = (() => {
                 // Update the value
                 target[finalKey] = config.value;
 
-                console.log(`UniqueConfig updated: ${type} =`, config.value);
-
             } catch (e) {
-                Utils.sendError(`Error updating UniqueConfig: ${e}`);
+                Utils.sendMessage("error", `Error updating UniqueConfig: ${e}`, 4, manifest?.name);
             }
         },
 
@@ -479,10 +564,22 @@ window.Utils = (() => {
                     // Global override
                     if (window.DEBUG_ALL) allowed = true;
 
-                    // If caller provided widgetName explicitly, honor that manifest
-                    if (!allowed && widgetName) {
-                        const manifest = window.ActiveWidgets?.[widgetName]?.manifest;
-                        if (manifest?.extra?.debug) allowed = true;
+                    // If caller provided a widget identifier/object, honor that manifest
+                    // Accept either: string widgetName, widget object, or manifest object.
+                    let _manifestCandidate = null;
+                    if (widgetName) {
+                        try {
+                            if (typeof widgetName === 'object' && widgetName !== null) {
+                                // Could be { name, extra, files } or { manifest: {...} }
+                                _manifestCandidate = widgetName.manifest ?? widgetName;
+                            } else if (typeof widgetName === 'string') {
+                                _manifestCandidate = window.ActiveWidgets?.[widgetName]?.manifest ?? null;
+                            }
+                        } catch (e) {
+                            _manifestCandidate = null;
+                        }
+
+                        if (!allowed && _manifestCandidate?.extra?.debug) allowed = true;
                     }
 
                     // Try to infer widget name from the message text if not allowed yet.
@@ -509,6 +606,28 @@ window.Utils = (() => {
 
                     // If not allowed by any method, skip showing the message.
                     if (!allowed) return;
+
+                // Mirror messages to developer console using appropriate levels.
+                try {
+                    const logPrefix = widgetName ? `[widget:${widgetName}] ` : "";
+                    const consoleMethods = {
+                        error: "error",
+                        warn: "warn",
+                        warning: "warn",
+                        success: "log",
+                        info: "info",
+                        debug: "debug"
+                    };
+                    const method = consoleMethods[type] || "log";
+                    if (typeof console !== 'undefined' && typeof console[method] === 'function') {
+                        console[method](`${logPrefix}${message}`);
+                    } else if (typeof console !== 'undefined' && typeof console.log === 'function') {
+                        console.log(`${logPrefix}${message}`);
+                    }
+                } catch (e) {
+                    // Keep main flow resilient if console logging fails
+                    try { if (typeof console !== 'undefined' && typeof console.error === 'function') console.error(`Utils.sendMessage: console logging failed: ${e}`); } catch (_) {}
+                }
                 }
 
                 const chip = document.createElement("div");
@@ -597,6 +716,8 @@ window.Utils = (() => {
                 });
 
                 for (const widget of widgets) {
+                    // Cache manifests in window.ActiveWidgets for other utilities to reference
+                    try { if (widget && widget.name) window.ActiveWidgets[widget.name] = { manifest: widget }; } catch (e) {}
                     if (!widget.enabled) continue;
 
                     const basePath = `${BACKEND_URL}/widgets/${widget.name}/`;
@@ -632,7 +753,16 @@ window.Utils = (() => {
                             await loadScript(basePath + widget.files.js, widget.name);
                         }
 
-                        if (window.WidgetInit) window.WidgetInit(widget, widgetRoot);
+                        if (window.WidgetInit) {
+                            // Capture the init function for this widget to avoid global overwrite
+                            window.WidgetInitRegistry = window.WidgetInitRegistry || {};
+                            try {
+                                window.WidgetInitRegistry[widget.name] = window.WidgetInit;
+                                window.WidgetInit(widget, widgetRoot);
+                            } finally {
+                                try { delete window.WidgetInit; } catch (e) { window.WidgetInit = undefined; }
+                            }
+                        }
                     }
                 }
 
@@ -660,9 +790,14 @@ window.Utils = (() => {
                     ...modules.map(m => ({ name: m.name, special: true, modulePath: m.path }))
                 ];
 
-                // if (gridEl) gridEl.innerHTML = "";
+                // Clear any existing entries to avoid duplication when re-rendering
+                if (gridEl) gridEl.innerHTML = "";
 
                 for (const entry of allEntries) {
+                    // Cache real widget manifests so SettingsRenderer and Update can access them
+                    if (!entry.special && entry.name) {
+                        try { window.ActiveWidgets[entry.name] = { manifest: entry }; } catch (e) {}
+                    }
                     const box = document.createElement("div");
                     box.className = "widget-box";
 
@@ -674,9 +809,11 @@ window.Utils = (() => {
                     if (!entry.special) {
                         const toggle = document.createElement("div");
                         toggle.className = "widget-toggle";
-                        toggle.classList.toggle("enabled", entry.enabled);
-                        toggle.classList.toggle("disabled", !entry.enabled);
-                        toggle.textContent = entry.enabled ? "Enabled" : "Disabled";
+                        // Some backends provide top-level `enabled`, others nest under behavior.enabled
+                        const isEnabled = (typeof entry.enabled !== 'undefined') ? entry.enabled : (entry.behavior?.enabled ?? false);
+                        toggle.classList.toggle("enabled", isEnabled);
+                        toggle.classList.toggle("disabled", !isEnabled);
+                        toggle.textContent = isEnabled ? "Enabled" : "Disabled";
 
                         toggle.addEventListener("click", async e => {
                             e.stopPropagation();
@@ -685,7 +822,9 @@ window.Utils = (() => {
                             toggle.classList.toggle("disabled", !newState);
                             toggle.textContent = newState ? "Enabled" : "Disabled";
 
+                            // Keep both shapes in sync for UI convenience
                             entry.enabled = newState;
+                            if (entry.behavior) entry.behavior.enabled = newState;
 
                             if (newState) {
                                 await Utils.loadWidget(entry, document.getElementById('widget-container'));
@@ -700,15 +839,17 @@ window.Utils = (() => {
                     }
 
                     // Click handler for loading settings into panel
-                    box.addEventListener("click", async () => {
+                        box.addEventListener("click", async () => {
                         const container = document.getElementById("settings-panel-content");
                         container.style.display = "block";
 
                         // Special modules inside Settings Widget
-                        if (entry.special && entry.modulePath) {
+                            if (entry.special && entry.modulePath) {
                             const html = await fetch(`${BACKEND_URL}/widgets/settings/module/${entry.modulePath}/settings.html`)
                                 .then(r => r.text());
                             container.innerHTML = html;
+                            // ensure panel scrolls to top when opened
+                            container.scrollTop = 0;
                             const closeButton = document.getElementById("settings-panel-content-close");
                             closeButton.addEventListener("click", () => {
                                 container.style.display = "none";
@@ -719,6 +860,8 @@ window.Utils = (() => {
                             const html = await fetch(`${BACKEND_URL}/widgets/${entry.name}/${entry.files.settings}`)
                                 .then(r => r.text());
                             container.innerHTML = html;
+                            // ensure panel scrolls to top when opened
+                            container.scrollTop = 0;
                             const closeButton = document.getElementById("settings-panel-content-close");
                             closeButton.addEventListener("click", () => {
                                 container.style.display = "none";
@@ -740,10 +883,10 @@ window.Utils = (() => {
             if (widget?.extra?.debug) {
                 if (widget.behavior?.enabled && widget.files) {
                     // Case 1: widget exists, debug true, enabled, has manifest JSON
-                    Utils.sendMessage("debug", `Widget "${widget.name}" is enabled. Creating...`, 30, widget.name);
+                    Utils.sendMessage("debug", `Widget "${widget.name}" is enabled. Creating...`, 30, widget);
                 } else {
                     // Case 2: widget exists, debug true, but disabled or missing manifest
-                    Utils.sendMessage("debug", `Widget "${widget.name}" is disabled or invalid. Skipping creation.`, 30, widget.name);
+                    Utils.sendMessage("debug", `Widget "${widget.name}" is disabled or invalid. Skipping creation.`, 30, widget);
                 }
             }
 
@@ -755,6 +898,8 @@ window.Utils = (() => {
             const existingRoot = container.querySelector && container.querySelector(`.widget-root[data-widget="${widget.name}"]`);
             if (existingRoot) {
                 widgetRoot = existingRoot;
+                // If we are re-using an existing root, ensure it's not marked deleted
+                try { window._deletedWidgets.delete(widget.name); } catch (e) {}
             }
 
             // Load CSS (always safe to append; browser ignores duplicates but we could guard if needed)
@@ -783,12 +928,16 @@ window.Utils = (() => {
                     widgetRoot.dataset.widget = widget.name;
 
                     container.appendChild(widgetRoot);
+                    // New/loaded widget is no longer deleted
+                    try { window._deletedWidgets.delete(widget.name); } catch (e) {}
                 } else {
                     // If no HTML file, create a basic root
                     widgetRoot = document.createElement("div");
                     widgetRoot.className = "widget-root";
                     widgetRoot.dataset.widget = widget.name;
                     container.appendChild(widgetRoot);
+                    // New/created widget is no longer deleted
+                    try { window._deletedWidgets.delete(widget.name); } catch (e) {}
                 }
             } else {
                 // widgetRoot exists — ensure it has class & dataset
@@ -819,11 +968,32 @@ window.Utils = (() => {
                 didLoadScript = true;
             }
 
+            // If we loaded the script now, or the script already exists, attempt to call
+            // the widget's init function if it registered itself on `window.WidgetInit`.
+            try {
+                // Use per-widget registry if available (prevents globals overwriting each other)
+                const initFn = resolveWidgetInit(widget.name);
+                if (initFn && (didLoadScript || scriptExists)) {
+                    try { initFn(widget, widgetRoot); } catch (e) { Utils.sendMessage && Utils.sendMessage('error', `WidgetInit for ${widget.name} failed: ${e}`, 4, widget.name); }
+                }
+            } catch (e) {
+                Utils.sendMessage && Utils.sendMessage('error', `Error while attempting to call WidgetInit: ${e}`, 4);
+            }
+
             return widgetRoot;
         },
 
         deleteWidget: async function(widgetName) {
             /* ---------------- Remove DOM Root ---------------- */
+            // Make delete idempotent: if already deleted, skip
+            try {
+                if (window._deletedWidgets.has(widgetName)) {
+                    Utils.sendMessage && Utils.sendMessage('debug', `deleteWidget: '${widgetName}' already removed, skipping.`, 3, widgetName);
+                    return;
+                }
+                window._deletedWidgets.add(widgetName);
+            } catch (e) {}
+
             const root = document.querySelector(`.widget-root[data-widget="${widgetName}"]`);
             if (root) {
                 root.remove();
@@ -847,7 +1017,7 @@ window.Utils = (() => {
                 st.remove();
             }
 
-            console.log(`Widget '${widgetName}' fully removed (DOM, scripts, styles).`);
+            Utils.sendMessage && Utils.sendMessage('info', `Widget '${widgetName}' fully removed (DOM, scripts, styles).`, 4, widgetName);
         },
 
         formatDate: function(date, config) {
@@ -1001,7 +1171,8 @@ window.SettingsRenderer = (() => {
             cfgHeader.textContent = "Configuration";
             container.appendChild(cfgHeader);
 
-            for(const [k,v] of Object.entries(manifest.config)) {
+            const cfgRoot = manifest.config || manifest.unique_config?.style || manifest.unique_config || {};
+            for(const [k,v] of Object.entries(cfgRoot)) {
                 container.appendChild(renderDynamicField("config",k,v));
             }
         }
@@ -1011,3 +1182,21 @@ window.SettingsRenderer = (() => {
 
     return { renderWidgetSettings };
 })();
+
+// Helper to resolve a widget's init function from the registry in a case-insensitive way.
+function resolveWidgetInit(name) {
+    try {
+        const registry = window.WidgetInitRegistry || {};
+        if (!name) return window.WidgetInit;
+        if (registry[name]) return registry[name];
+        const lower = name.toLowerCase();
+        if (registry[lower]) return registry[lower];
+        // fallback: find any key that matches case-insensitively
+        for (const k of Object.keys(registry)) {
+            if (k.toLowerCase() === lower) return registry[k];
+        }
+        return window.WidgetInit;
+    } catch (e) {
+        return window.WidgetInit;
+    }
+}

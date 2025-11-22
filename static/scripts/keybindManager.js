@@ -33,7 +33,7 @@ window.KeybindManager = (() => {
                     bind(savedKeybinds[combo], combo);
                 }
             }
-        } catch (e) { console.error("Failed to load keybinds", e); }
+        } catch (e) { Utils.sendMessage && Utils.sendMessage('error', `Failed to load keybinds: ${e}`, 4); }
     };
 
     // Persist keybinds to JSON
