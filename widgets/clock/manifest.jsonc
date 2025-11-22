@@ -27,12 +27,7 @@
         "html": "widget.html",
         "css": "widget.css",
         "js": "widget.js",
-
-        // Optional additional assets (images, sounds, JSON, etc.)
-        "assets": [
-            "assets/clock-background.png",
-            "assets/tick.wav"
-        ]
+        "settings": "settings.html"
     },
 
 

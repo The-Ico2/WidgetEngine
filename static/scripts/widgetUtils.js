@@ -15,12 +15,15 @@ window.Update = (() => {
          * @param {object} value - dot-path key to update
          */
         manifest: async function(name, path, value) {
-            if (!name || !path) return;
+            if (!name || !path) {
+                Utils.sendMessage("error", `Update.manifest called with invalid args: name=${name}, path=${path}`, 4, name)
+                return;
+            }
 
             // 1. Get manifest from your global widget cache
             const manifest = window.ActiveWidgets?.[name]?.manifest;
             if (!manifest) {
-                Utils.sendMessage("error", `Manifest for ${name} not found`)
+                Utils.sendMessage("error", `[widget:${name}] Manifest not found`, 4, name)
                 return;
             }
 
@@ -36,9 +39,9 @@ window.Update = (() => {
             // 3. Apply DOM update if widget is currently rendered
             if (window.Update?.widget) {
                 try {
-                    Update.widget(null, manifest);  
+                    Update.widget(null, manifest);
                 } catch (e) {
-                    Utils.sendMessage("warn", `Widget live update skipped: ${e}`)
+                    Utils.sendMessage("warn", `[widget:${name}] Widget live update skipped: ${e}`, 4, name)
                 }
             }
 
@@ -51,9 +54,9 @@ window.Update = (() => {
                 });
 
                 if (!res.ok)
-                    Utils.sendMessage("error", `Failed manifest update for ${name}/${path}: ${await res.text()}`);
+                    Utils.sendMessage("error", `[widget:${name}] Failed manifest update for ${path}: ${await res.text()}`, 4, name);
             } catch (e) {
-                Utils.sendMessage("error", `Error updating manifest for '${name}': ${e}`);
+                Utils.sendMessage("error", `[widget:${name}] Error updating manifest: ${e}`, 4, name);
             }
         },
 
@@ -64,7 +67,10 @@ window.Update = (() => {
          * @param {Object} manifest - full widget manifest
          */
         widget: function(root, manifest) {
-            if (!root || !manifest) return;
+            if (!root || !manifest) {
+                Utils.sendMessage("debug", `Update.widget skipped: root or manifest missing for ${manifest?.name ?? 'unknown'}`, 3, manifest?.name)
+                return;
+            }
 
             // ---------------- Behavior Rules ----------------
             if (manifest.behavior) {
@@ -222,7 +228,7 @@ window.Apply = (() => {
                                 window.WidgetInit(manifest, root);
                                 root._initialized = true; // mark as initialized
                             } catch (e) {
-                                Utils.sendMessage("error", `Error during onInit for widget ${manifest.name}: ${e}`);
+                                Utils.sendMessage("error", `[widget:${manifest.name}] Error during onInit: ${e}`, 4, manifest.name);
                             }
                         }
 
@@ -248,10 +254,10 @@ window.Apply = (() => {
                                         if (window.WidgetResize) await window.WidgetResize(manifest, root, config.width, config.height);
                                         break;
                                     default:
-                                        Utils.sendMessage("warn", `Unknown lifecycle hook: ${hookName}`);
+                                        Utils.sendMessage("warn", `[widget:${manifest.name}] Unknown lifecycle hook: ${hookName}`, 4, manifest.name);
                                 }
                             } catch (e) {
-                                Utils.sendMessage("error", `Error during ${hookName} for widget ${manifest.name}: ${e}`);
+                                Utils.sendMessage("error", `[widget:${manifest.name}] Error during ${hookName}: ${e}`, 4, manifest.name);
                             }
                         };
                         break;
@@ -260,7 +266,7 @@ window.Apply = (() => {
                         break;
                 }
             } catch (e) {
-                Utils.sendMessage("error", `applyBehaviorRules failed: ${e}`)
+                Utils.sendMessage("error", `[widget:${manifest?.name ?? 'unknown'}] applyBehaviorRules failed: ${e}`, 4, manifest?.name)
             }
         },
 
@@ -300,17 +306,17 @@ window.Apply = (() => {
                                     : baseFontSize + "px";
                             }
                         } else {
-                            Utils.sendMessage("warn", `Resizing is disabled for widget: ${root.dataset.widget}`, 2000)
+                            Utils.sendMessage("warn", `[widget:${root.dataset.widget}] Resizing is disabled for widget`, 2000, root.dataset.widget)
                         }
                         break;
                     }
 
                     default:
-                        Utils.sendMessage("warn", `Unknown DisplayRules type: ${type}`)
+                        Utils.sendMessage("warn", `[widget:${manifest?.name ?? 'unknown'}] Unknown DisplayRules type: ${type}`, 4, manifest?.name)
                         break;
                 }
             } catch (e) {
-                Utils.sendMessage("error", `applyDisplayRules failed: ${e}`)
+                Utils.sendMessage("error", `[widget:${manifest?.name ?? 'unknown'}] applyDisplayRules failed: ${e}`, 4, manifest?.name)
             }
         },
 
@@ -394,12 +400,12 @@ window.Apply = (() => {
                         break;
 
                     default:
-                        Utils.sendMessage("warn", `Unknown StylingRules type: ${type}`)
+                        Utils.sendMessage("warn", `[widget:${manifest?.name ?? 'unknown'}] Unknown StylingRules type: ${type}`, 4, manifest?.name)
                         break;
                 }
 
             } catch(e) {
-                Utils.sendMessage("error", `applyStylingRules failed: ${e}`)
+                Utils.sendMessage("error", `[widget:${manifest?.name ?? 'unknown'}] applyStylingRules failed: ${e}`, 4, manifest?.name)
             }
 
             // ---------------- Helper ----------------
@@ -459,8 +465,52 @@ window.Utils = (() => {
     const activeChips = []; // keep track of active messages
 
     const Utils = {
-        sendMessage: function(type, message, duration = 4) {
+        // New signature: optional widgetName helps reliably gate messages
+        sendMessage: function(type, message, duration = 4, widgetName = null) {
             try {
+                // Gate non-essential messages (debug, success, warn/warning)
+                // so they only appear when the related widget has debug enabled
+                // (`manifest.extra.debug`) or when a global `window.DEBUG_ALL`
+                // override is set. `info` and `error` remain visible always.
+                const gatedTypes = ["debug", "success", "warn", "warning"];
+                if (gatedTypes.includes(type)) {
+                    let allowed = false;
+
+                    // Global override
+                    if (window.DEBUG_ALL) allowed = true;
+
+                    // If caller provided widgetName explicitly, honor that manifest
+                    if (!allowed && widgetName) {
+                        const manifest = window.ActiveWidgets?.[widgetName]?.manifest;
+                        if (manifest?.extra?.debug) allowed = true;
+                    }
+
+                    // Try to infer widget name from the message text if not allowed yet.
+                    if (!allowed && typeof message === 'string') {
+                        const patterns = [
+                            /\[widget:([^\]]+)\]/i,
+                            /Widget\s+"([^\"]+)"/i,
+                            /widget\s+"([^\"]+)"/i,
+                            /for widget\s+"([^\"]+)"/i,
+                            /widget:\s*([^\s,;]+)/i
+                        ];
+                        for (const p of patterns) {
+                            const m = message.match(p);
+                            if (m) {
+                                const inferred = m[1];
+                                const manifest = window.ActiveWidgets?.[inferred]?.manifest;
+                                if (manifest?.extra?.debug) {
+                                    allowed = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // If not allowed by any method, skip showing the message.
+                    if (!allowed) return;
+                }
+
                 const chip = document.createElement("div");
                 chip.className = `msg-chip msg-${type}`;
                 chip.textContent = message;
@@ -485,6 +535,7 @@ window.Utils = (() => {
 
                 const typeStyles = {
                     error:   { backgroundColor: "rgba(220,53,69,0.95)" },    
+                    warn: { backgroundColor: "rgba(255,193,7,0.95)", color: "#222" },
                     warning: { backgroundColor: "rgba(255,193,7,0.95)", color: "#222" },
                     success: { backgroundColor: "rgba(40,167,69,0.95)" },
                     info:    { backgroundColor: "rgba(23,162,184,0.95)" },
@@ -673,7 +724,7 @@ window.Utils = (() => {
                                 container.style.display = "none";
                             });
                         } else {
-                            Utils.sendMessage("warn", `No settings found for ${entry.name}`)
+                            Utils.sendMessage("warn", `No settings found for ${entry.name}`, 4, entry.name)
                         }
                     });
 
@@ -689,10 +740,10 @@ window.Utils = (() => {
             if (widget?.extra?.debug) {
                 if (widget.behavior?.enabled && widget.files) {
                     // Case 1: widget exists, debug true, enabled, has manifest JSON
-                    Utils.sendMessage("debug", `Widget "${widget.name}" is enabled. Creating...`, 30);
+                    Utils.sendMessage("debug", `Widget "${widget.name}" is enabled. Creating...`, 30, widget.name);
                 } else {
                     // Case 2: widget exists, debug true, but disabled or missing manifest
-                    Utils.sendMessage("debug", `Widget "${widget.name}" is disabled or invalid. Skipping creation.`, 30);
+                    Utils.sendMessage("debug", `Widget "${widget.name}" is disabled or invalid. Skipping creation.`, 30, widget.name);
                 }
             }
 
@@ -845,7 +896,7 @@ window.SettingsRenderer = (() => {
 
         const debug = manifest.extra?.debug;
 
-        if (debug) Utils.sendMessage("debug", `Rendering settings for widget "${widgetName}"`, 5);
+        if (debug) Utils.sendMessage("debug", `Rendering settings for widget "${widgetName}"`, 5, widgetName);
 
         container.innerHTML = `<h2>${manifest.label || manifest.name} Settings</h2>`;
 
@@ -864,10 +915,10 @@ window.SettingsRenderer = (() => {
 
         // -------------------- DYNAMIC FIELDS --------------------
         async function update(section, key, value) {
-            if (debug) Utils.sendMessage("debug", `Updating widget "${widgetName}" - ${section ? section + "." : ""}${key}: ${value}`, 5);
+            if (debug) Utils.sendMessage("debug", `Updating widget "${widgetName}" - ${section ? section + "." : ""}${key}: ${value}`, 5, widgetName);
             try {
                 await Update.manifest(null, manifest, widgetName, section ? `${section}.${key}` : key, value);
-                if (debug) Utils.sendMessage("debug", `Update applied successfully for widget "${widgetName}"`, 5);
+                if (debug) Utils.sendMessage("debug", `Update applied successfully for widget "${widgetName}"`, 5, widgetName);
             } catch (e) {
                 Utils.sendMessage("error", `Failed to update widget "${widgetName}": ${e}`);
             }
@@ -881,7 +932,7 @@ window.SettingsRenderer = (() => {
             el.onclick = () => {
                 value = !value;
                 el.textContent = label + ": " + (value ? "ON" : "OFF");
-                if (debug) Utils.sendMessage("debug", `Toggled "${label}" to ${value}`, 3);
+                if (debug) Utils.sendMessage("debug", `Toggled "${label}" to ${value}`, 3, widgetName);
                 cb(value);
             };
             return el;
@@ -955,7 +1006,7 @@ window.SettingsRenderer = (() => {
             }
         }
 
-        if (debug) Utils.sendMessage("debug", `Settings UI rendered for widget "${widgetName}"`, 5);
+        if (debug) Utils.sendMessage("debug", `Settings UI rendered for widget "${widgetName}"`, 5, widgetName);
     }
 
     return { renderWidgetSettings };
