@@ -125,16 +125,65 @@ window.Update = (() => {
                 }
             }
 
-            // 4. Push update to backend
+            // 4. Push update to backend with retries for transient server errors
             try {
-                const res = await fetch(`${BACKEND_URL}/api/widgets/${encodeURIComponent(name)}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ path, value })
-                });
+                const payload = { path, value };
+                const maxRetries = 2;
+                let attempt = 0;
+                let finalError = null;
 
-                if (!res.ok)
-                    Utils.sendMessage("error", `[widget:${name}] Failed manifest update for ${path}: ${await res.text()}`, 4, name);
+                for (; attempt <= maxRetries; attempt++) {
+                    try {
+                        if (attempt > 0) await new Promise(r => setTimeout(r, 200 * attempt));
+
+                        // Log the outgoing payload to console for debugging
+                        try { console.debug(`[Update.manifest] PATCH ${BACKEND_URL}/api/widgets/${name} payload:`, payload); } catch (_) {}
+
+                        const res = await fetch(`${BACKEND_URL}/api/widgets/${encodeURIComponent(name)}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (res.ok) {
+                            finalError = null;
+                            break; // success
+                        }
+
+                        // read body for diagnosis
+                        let bodyText = '';
+                        try { bodyText = await res.text(); } catch (e) { bodyText = `<unable to read response body: ${e}>`; }
+                        let parsed = null;
+                        try { parsed = JSON.parse(bodyText); } catch (_) { parsed = null; }
+
+                        // If server error, consider retrying
+                        if (res.status >= 500 && attempt < maxRetries) {
+                            try { console.warn(`[Update.manifest] transient server error status=${res.status}, attempt=${attempt}`, parsed ?? bodyText); } catch (_) {}
+                            finalError = { status: res.status, body: parsed ?? bodyText };
+                            continue; // retry
+                        }
+
+                        // Non-retriable or final attempt failed: surface to user
+                        const serverMsg = parsed?.error || parsed?.message || bodyText || `<empty response>`;
+                        try { console.error(`[widget:${name}] Manifest update failed (status=${res.status}) payload:`, payload, 'response:', parsed ?? bodyText); } catch (_) {}
+                        Utils.sendMessage("error", `[widget:${name}] Failed manifest update for ${path}: ${serverMsg} (status=${res.status})`, 6, name);
+                        finalError = { status: res.status, body: parsed ?? bodyText };
+                        break;
+
+                    } catch (fetchErr) {
+                        // network or other fetch-level error
+                        try { console.warn(`[Update.manifest] network/fetch error on attempt ${attempt}:`, fetchErr); } catch (_) {}
+                        finalError = fetchErr;
+                        if (attempt < maxRetries) continue;
+                        Utils.sendMessage("error", `[widget:${name}] Error updating manifest: ${fetchErr}`, 4, name);
+                    }
+                }
+
+                if (finalError) {
+                    // If finalError exists and we didn't already show a message above, log it for diagnosis
+                    try { console.debug(`[Update.manifest] finalError for ${name}`, finalError); } catch(_){}
+                }
+
             } catch (e) {
                 Utils.sendMessage("error", `[widget:${name}] Error updating manifest: ${e}`, 4, name);
             }
@@ -153,46 +202,46 @@ window.Update = (() => {
             }
 
             // ---------------- Behavior Rules ----------------
-            if (manifest.behavior) {
+            if (manifest.widget_features.behavior) {
                 // Enabled
-                if ("enabled" in manifest) window.Apply.BehaviorRules(root, manifest, {}, "enabled");
+                if ("enabled" in manifest) window.WidgetUpdates.BehaviorRules(root, manifest, {}, "enabled");
 
                 // Draggable
-                if ("draggable" in manifest.behavior) window.Apply.BehaviorRules(root, manifest, {}, "draggable");
+                if ("draggable" in manifest.widget_features.behavior) window.WidgetUpdates.BehaviorRules(root, manifest, {}, "draggable");
 
                 // Click-Through
-                if ("clickThrough" in manifest.behavior) window.Apply.BehaviorRules(root, manifest, {}, "clickThrough");
+                if ("clickThrough" in manifest.widget_features.behavior) window.WidgetUpdates.BehaviorRules(root, manifest, {}, "clickThrough");
 
                 // Focusable
-                if ("focusable" in manifest.behavior) window.Apply.BehaviorRules(root, manifest, {}, "focusable");
+                if ("focusable" in manifest.widget_features.behavior) window.WidgetUpdates.BehaviorRules(root, manifest, {}, "focusable");
 
                 // Lifecycle hooks (onInit already handled here)
-                if ("lifecycle" in manifest.behavior) window.Apply.BehaviorRules(root, manifest, {}, "lifecycle");
+                if ("lifecycle" in manifest.widget_features.behavior) window.WidgetUpdates.BehaviorRules(root, manifest, {}, "lifecycle");
             }
 
             // ---------------- Display Rules ----------------
-            if (manifest.display) {
+            if (manifest.widget_features.display) {
                 // Position
-                if (manifest.display.position) window.Apply.DisplayRules(root, manifest, {}, "position");
+                if (manifest.widget_features.display.position) window.WidgetUpdates.DisplayRules(root, manifest, {}, "position");
 
                 // Size / Scaling
-                if (manifest.display.size) window.Apply.DisplayRules(root, manifest, {}, "size");
+                if (manifest.widget_features.display.size) window.WidgetUpdates.DisplayRules(root, manifest, {}, "size");
             }
 
             // ---------------- Styling Rules ----------------
-            if (manifest.styling) {
-                window.Apply.StylingRules(root, manifest, {}, "useRootVariables");
-                window.Apply.StylingRules(root, manifest, {}, "font");
-                window.Apply.StylingRules(root, manifest, {}, "border");
-                window.Apply.StylingRules(root, manifest, {}, "background");
-                window.Apply.StylingRules(root, manifest, {}, "animation");
+            if (manifest.widget_features.styling) {
+                window.WidgetUpdates.StylingRules(root, manifest, {}, "useRootVariables");
+                window.WidgetUpdates.StylingRules(root, manifest, {}, "font");
+                window.WidgetUpdates.StylingRules(root, manifest, {}, "border");
+                window.WidgetUpdates.StylingRules(root, manifest, {}, "background");
+                window.WidgetUpdates.StylingRules(root, manifest, {}, "animation");
             }
 
             // ---------------- Unique Config ----------------
             if (manifest.unique_config) {
                 for (const key in manifest.unique_config) {
                     if (manifest.unique_config.hasOwnProperty(key)) {
-                        window.Apply.UniqueConfig(root, manifest, { value: manifest.unique_config[key] }, key);
+                        window.WidgetUpdates.UniqueConfig(root, manifest, { value: manifest.unique_config[key] }, key);
                     }
                 }
             }
@@ -202,14 +251,14 @@ window.Update = (() => {
     return Update;
 })();
 
-window.Apply = (() => {
-    const Apply = {
+window.WidgetUpdates = (() => {
+    const WidgetUpdates = {
         BehaviorRules: function(root, manifest, config, type) {
             try {
                 switch (type) {
                     // ---------------- Enabled ----------------
                     case "enabled":
-                        if (manifest.enabled === false) {
+                        if (manifest.widget_features?.behavior?.enabled === false) {
                             if (root && root.parentNode) root.remove();
                             return null;
                         }
@@ -225,15 +274,15 @@ window.Apply = (() => {
 
                     // ---------------- Draggable ----------------
                     case "draggable":
-                        if (!root || !manifest?.display?.position) return;
+                        if (!root || !manifest?.widget_features?.display?.position) return;
 
-                        const draggable = manifest.behavior?.draggable ?? false;
+                        const draggable = manifest.widget_features?.behavior?.draggable ?? false;
                         if (!draggable || root._draggableInitialized) return;
 
                         // Apply initial position & styling
                         root.style.position = "absolute";
-                        root.style.left = manifest.display.position.x + "px";
-                        root.style.top = manifest.display.position.y + "px";
+                        root.style.left = manifest.widget_features?.display?.position.x + "px";
+                        root.style.top = manifest.widget_features?.display?.position.y + "px";
                         root.style.cursor = "grab";
 
                         let offsetX = 0, offsetY = 0, dragging = false;
@@ -265,7 +314,7 @@ window.Apply = (() => {
                             timeoutId = setTimeout(async () => {
                                 const x = parseInt(root.style.left);
                                 const y = parseInt(root.style.top);
-                                await Update.manifest(manifest.name, "display.position", { x, y });
+                                await Update.manifest(manifest.name, "widget_features.display.position", { x, y });
                             }, 500);
                         });
                         root._draggableInitialized = true;
@@ -273,16 +322,16 @@ window.Apply = (() => {
 
                     // ---------------- Click-Through ----------------
                     case "clickThrough":
-                        if (!root || manifest.behavior?.clickThrough === undefined) return;
-                        root.style.pointerEvents = manifest.behavior.clickThrough ? "none" : "auto";
+                        if (!root || manifest.widget_features?.behavior?.clickThrough === undefined) return;
+                        root.style.pointerEvents = manifest.widget_features?.behavior.clickThrough ? "none" : "auto";
                         value = root.style.pointerEvents
 
                         break;
 
                     // ---------------- Focusable ----------------
                     case "focusable":
-                        if (!root || manifest.behavior?.focusable === undefined) return;
-                        if (manifest.behavior.focusable) {
+                        if (!root || manifest.widget_features?.behavior?.focusable === undefined) return;
+                        if (manifest.widget_features?.behavior?.focusable) {
                             root.tabIndex = 0;
                             root.addEventListener("focus", () => {
                                 if (window.WidgetFocus) window.WidgetFocus(manifest.name);
@@ -298,9 +347,9 @@ window.Apply = (() => {
 
                     // ---------------- Lifecycle ----------------
                     case "lifecycle":
-                        if (!root || !manifest.behavior?.lifecycle) return;
+                        if (!root || !manifest.widget_features?.behavior?.lifecycle) return;
 
-                        const hooks = manifest.behavior.lifecycle;
+                        const hooks = manifest.widget_features?.behavior?.lifecycle;
 
                         // Call onInit immediately if enabled and not yet initialized.
                         // Mark the root as initialized BEFORE calling into the widget init
@@ -361,12 +410,12 @@ window.Apply = (() => {
 
         DisplayRules: function(root, manifest, config, type) {
             try {
-                if (!root || !manifest?.display) return;
+                if (!root || !manifest?.widget_features?.display) return;
 
                 switch (type) {
                     // ---------------- Position ----------------
                     case "position": {
-                        const pos = manifest.display.position;
+                        const pos = manifest.widget_features?.display?.position;
                         if (!pos) return;
 
                         root.style.position = "absolute";
@@ -378,22 +427,13 @@ window.Apply = (() => {
 
                     // ---------------- Size / Scaling ----------------
                     case "size": {
-                        const size = manifest.display.size;
+                        const size = manifest.widget_features?.display?.size;
                         if (!size) return;
 
                         if (size.resizable) {
                             root.style.width = size.width + "px";
                             root.style.height = size.height + "px";
                             root.style.transform = `scale(${size.scale ?? 1})`;
-
-                            // Apply font scaling if enabled
-                            const fontScaling = manifest.general_style?.font?.widgetScaling;
-                            if (fontScaling) {
-                                const baseFontSize = config.fontSize ?? 24;
-                                root.style.fontSize = config.fontSizeScaling
-                                    ? baseFontSize * (size.scale ?? 1) + "px"
-                                    : baseFontSize + "px";
-                            }
                         } else {
                             Utils.sendMessage("warn", `[widget:${root.dataset.widget}] Resizing is disabled for widget`, 2000, root.dataset.widget)
                         }
@@ -411,8 +451,8 @@ window.Apply = (() => {
 
         StylingRules: function(root, manifest, config, type) {
             try {
-                if (!root || !manifest?.styling) return;
-                const styling = manifest.styling;
+                if (!root || !manifest?.widget_features?.styling) return;
+                const styling = manifest?.widget_features?.styling;
 
                 switch (type) {
 
@@ -438,8 +478,8 @@ window.Apply = (() => {
                             root.style.color = styling.font.color;
                             
                             // If widgetScaling is enabled, scale font size according to DisplayRules
-                            if (styling.font.widgetScaling && manifest.display?.size) {
-                                const scale = manifest.display.size.scale ?? 1;
+                            if (styling.font.widgetScaling && manifest?.widget_features?.display?.size) {
+                                const scale = manifest?.widget_features?.display?.size?.scale ?? 1;
                                 const baseFontSize = parseInt(styling.font.size) || 24;
                                 root.style.fontSize = (config.fontSizeScaling 
                                     ? baseFontSize * scale 
@@ -511,14 +551,13 @@ window.Apply = (() => {
             }
         },
 
-
         UniqueConfig: function(root, manifest, config, type) {
             try {
                 if (!manifest?.unique_config) return;
 
                 // type will represent the key or nested path, e.g., "style.showSeconds"
                 const keys = type.split(".");
-                let target = manifest.unique_config;
+                let target = manifest?.unique_config;
 
                 // Traverse to the final property
                 for (let i = 0; i < keys.length - 1; i++) {
@@ -545,7 +584,7 @@ window.Apply = (() => {
 
     }
 
-    return Apply;
+    return WidgetUpdates;
 })();
 
 window.Utils = (() => {
@@ -557,7 +596,7 @@ window.Utils = (() => {
             try {
                 // Gate non-essential messages (debug, success, warn/warning)
                 // so they only appear when the related widget has debug enabled
-                // (`manifest.extra.debug`) or when a global `window.DEBUG_ALL`
+                // (`manifest.extra.debug.enabled`) or when a global `window.DEBUG_ALL`
                 // override is set. `info` and `error` remain visible always.
                 const gatedTypes = ["debug", "success", "warn", "warning"];
                 if (gatedTypes.includes(type)) {
@@ -581,7 +620,7 @@ window.Utils = (() => {
                             _manifestCandidate = null;
                         }
 
-                        if (!allowed && _manifestCandidate?.extra?.debug) allowed = true;
+                        if (!allowed && _manifestCandidate?.extra?.debug?.enabled) allowed = true;
                     }
 
                     // Try to infer widget name from the message text if not allowed yet.
@@ -598,7 +637,7 @@ window.Utils = (() => {
                             if (m) {
                                 const inferred = m[1];
                                 const manifest = window.ActiveWidgets?.[inferred]?.manifest;
-                                if (manifest?.extra?.debug) {
+                                if (manifest?.extra?.debug?.enabled) {
                                     allowed = true;
                                     break;
                                 }
@@ -719,23 +758,29 @@ window.Utils = (() => {
 
                 for (const widget of widgets) {
                     // Cache manifests in window.ActiveWidgets for other utilities to reference
-                    try { if (widget && widget.name) window.ActiveWidgets[widget.name] = { manifest: widget }; } catch (e) {}
-                    if (!widget.enabled) continue;
+                    try { 
+                        if (widget && widget.name) {
+                            window.ActiveWidgets[widget.name] = {
+                                manifest: widget
+                            }
+                        } 
+                    } catch (e) {}
+                    if (!widget.widget_features?.behavior?.enabled) continue;
 
                     const basePath = `${BACKEND_URL}/widgets/${widget.name}/`;
 
                     /* ---------------- Inject CSS ---------------- */
-                    if (widget.files.css) {
+                    if (widget.required_settings.files.css) {
                         const link = document.createElement("link");
                         link.rel = "stylesheet";
-                        link.href = basePath + widget.files.css;
+                        link.href = basePath + widget.required_settings.files.css;
                         document.head.appendChild(link);
                     }
 
                     /* ---------------- Inject HTML ---------------- */
                     let widgetRoot = null;
-                    if (widget.files.html) {
-                        const html = await fetch(basePath + widget.files.html).then(r => r.text());
+                    if (widget.required_settings.files.html) {
+                        const html = await fetch(basePath + widget.required_settings.files.html).then(r => r.text());
                         const temp = document.createElement("div");
                         temp.innerHTML = html.trim();
                         widgetRoot = temp.firstElementChild;
@@ -746,13 +791,13 @@ window.Utils = (() => {
                     }
 
                     /* ---------------- Inject JS ---------------- */
-                    if (widget.files.js) {
-                        if (Array.isArray(widget.files.js)) {
-                            for (const jsFile of widget.files.js) {
+                    if (widget.required_settings.files.js) {
+                        if (Array.isArray(widget.required_settings.files.js)) {
+                            for (const jsFile of widget.required_settings.files.js) {
                                 await loadScript(basePath + jsFile, widget.name);
                             }
                         } else {
-                            await loadScript(basePath + widget.files.js, widget.name);
+                            await loadScript(basePath + widget.required_settings.files.js, widget.name);
                         }
 
                         if (window.WidgetInit) {
@@ -812,7 +857,7 @@ window.Utils = (() => {
                         const toggle = document.createElement("div");
                         toggle.className = "widget-toggle";
                         // Some backends provide top-level `enabled`, others nest under behavior.enabled
-                        const isEnabled = (typeof entry.enabled !== 'undefined') ? entry.enabled : (entry.behavior?.enabled ?? false);
+                        const isEnabled = (typeof entry.enabled !== 'undefined') ? entry.enabled : (entry.widget_features?.behavior?.enabled ?? false);
                         toggle.classList.toggle("enabled", isEnabled);
                         toggle.classList.toggle("disabled", !isEnabled);
                         toggle.textContent = isEnabled ? "Enabled" : "Disabled";
@@ -826,7 +871,7 @@ window.Utils = (() => {
 
                             // Keep both shapes in sync for UI convenience
                             entry.enabled = newState;
-                            if (entry.behavior) entry.behavior.enabled = newState;
+                            if (entry.widget_features?.behavior) entry.widget_features.behavior.enabled = newState;
 
                             if (newState) {
                                 await Utils.loadWidget(entry, document.getElementById('widget-container'));
@@ -834,7 +879,7 @@ window.Utils = (() => {
                                 await Utils.deleteWidget(entry.name);
                             }
 
-                            await Update.manifest(entry.name, "behavior.enabled", newState);
+                            await Update.manifest(entry.name, "widget_features.behavior.enabled", newState);
                         });
 
                         box.appendChild(toggle);
@@ -882,8 +927,8 @@ window.Utils = (() => {
         },
         
         loadWidget: async function(widget, container = document.body) {
-            if (widget?.extra?.debug) {
-                if (widget.behavior?.enabled && widget.files) {
+            if (widget?.extra?.debug?.enabled) {
+                if (widget.widget_features.behavior?.enabled && widget.required_settings.files) {
                     // Case 1: widget exists, debug true, enabled, has manifest JSON
                     Utils.sendMessage("debug", `Widget "${widget.name}" is enabled. Creating...`, 30, widget);
                 } else {
@@ -905,21 +950,21 @@ window.Utils = (() => {
             }
 
             // Load CSS (always safe to append; browser ignores duplicates but we could guard if needed)
-            if (widget.files.css) {
+            if (widget.required_settings.files.css) {
                 const cssId = `widget-style-${widget.name}`;
                 if (!document.querySelector(`link#${cssId}`)) {
                     const link = document.createElement("link");
                     link.id = cssId;
                     link.rel = "stylesheet";
-                    link.href = basePath + widget.files.css;
+                    link.href = basePath + widget.required_settings.files.css;
                     document.head.appendChild(link);
                 }
             }
 
             // Load HTML only if root doesn't exist or is empty
             if (!widgetRoot || widgetRoot.children.length === 0) {
-                if (widget.files.html) {
-                    const html = await fetch(basePath + widget.files.html).then(r => r.text());
+                if (widget.required_settings.files.html) {
+                    const html = await fetch(basePath + widget.required_settings.files.html).then(r => r.text());
                     const temp = document.createElement("div");
                     temp.innerHTML = html.trim();
 
@@ -950,7 +995,7 @@ window.Utils = (() => {
             // Load JS only if not already loaded (we mark script with data-widget)
             const scriptExists = !!document.querySelector(`script[data-widget="${widget.name}"]`);
             let didLoadScript = false;
-            if (widget.files.js && !scriptExists) {
+            if (widget.required_settings.files.js && !scriptExists) {
                 const loadScript = src => new Promise((resolve, reject) => {
                     const s = document.createElement("script");
                     s.src = src;
@@ -960,12 +1005,12 @@ window.Utils = (() => {
                     document.body.appendChild(s);
                 });
 
-                if (Array.isArray(widget.files.js)) {
-                    for (const jsFile of widget.files.js) {
+                if (Array.isArray(widget.required_settings.files.js)) {
+                    for (const jsFile of widget.required_settings.files.js) {
                         await loadScript(basePath + jsFile);
                     }
                 } else {
-                    await loadScript(basePath + widget.files.js);
+                    await loadScript(basePath + widget.required_settings.files.js);
                 }
                 didLoadScript = true;
             }
@@ -1076,7 +1121,7 @@ window.SettingsRenderer = (() => {
             return;
         }
 
-        const debug = manifest.extra?.debug;
+        const debug = manifest.extra?.debug?.enabled;
 
         if (debug) Utils.sendMessage("debug", `Rendering settings for widget "${widgetName}"`, 5, widgetName);
 

@@ -4,76 +4,103 @@
     "description": "Clock Display",
     "author": "Ico2",
     "version": "1.0.0",
-    "permissions": {
-        "keyboard": false,
-        "filesystem": false,
-        "network": false,
-        "overlay": true,
-        "exclusiveHotkeys": false
-    },
-    "files": {
-        "html": "widget.html",
-        "css": "widget.css",
-        "js": "widget.js",
-        "settings": "settings.html"
-    },
-    "behavior": {
-        "enabled": true,
-        "draggable": true,
-        "clickThrough": false,
-        "lifecycle": {
-            "onInit": true,
-            "onDestroy": true,
-            "onSettingsUpdate": true,
-            "onFocus": true,
-            "onBlur": true,
-            "onResize": true
+    "required_settings": {
+        "permissions": {
+            "keyboard": false,
+            "filesystem": false,
+            "network": false,
+            "overlay": true,
+            "exclusiveHotkeys": false
+        },
+        "files": {
+            "html": "widget.html",
+            "css": "widget.css",
+            "js": "widget.js",
+            "settings": "settings.html"
         }
     },
-    "display": {
-        "position": {
-            "x": 542,
-            "y": 743,
-            "zIndex": 10
+    "widget_features": {
+        "behavior": {
+            "enabled": true,
+            "draggable": true,
+            "clickThrough": false,
+            "lifecycle": {
+                "onInit": true,
+                "onDestroy": true,
+                "onSettingsUpdate": true,
+                "onFocus": true,
+                "onBlur": true,
+                "onResize": true
+            }
         },
-        "size": {
-            "width": 200,
-            "height": 100,
-            "scale": 1.0,
-            "resizable": true
-        }
-    },
-    "styling": {
-        "useRootVariables": true,
-        "font": {
-            "family": "Arial",
-            "size": "24px",
-            "color": "#FFFFFF",
-            "widgetScaling": false
+        "display": {
+            "position": {
+                "x": 91,
+                "y": 664,
+                "zIndex": 10
+            },
+            "size": {
+                "width": 200,
+                "height": 100,
+                "scale": 1.0,
+                "resizable": true
+            }
         },
-        "border": {
-            "style": "solid",
-            "width": "2px",
-            "color": "#FFFFFF"
-        },
-        "background": {
-            "color": "#000000",
-            "alpha": 0.2
-        },
-        "animation": {
-            "enabled": false,
-            "type": "fade-in",
-            "duration": 200
+        "styling": {
+            "useRootVariables": true,
+            "font": {
+                "family": "Arial",
+                "size": "24px",
+                "color": "#FFFFFF",
+                "widgetScaling": false
+            },
+            "border": {
+                "style": "solid",
+                "width": "2px",
+                "color": "#FFFFFF"
+            },
+            "background": {
+                "color": "#000000",
+                "alpha": 0.2
+            },
+            "animation": {
+                "enabled": false,
+                "type": "fade-in",
+                "duration": 200
+            }
         }
     },
     "unique_config": {
         "style": {
             "type": "digital",
-            "frameStyle": "window",
-            "use24HourFormat": false,
-            "showSeconds": true,
-            "showDate": true,
-            "dateFormat": "MM/DD/YYYY"
+            "frame_style": "window",
+            "use_24_hour_format": false,
+            "show_seconds": true,
+            "show_date": true,
+            "date_format": "MM/DD/YYYY"
+        }
+    },
+    "states": {
+        "default": {
+            "internal_clock_offset": 0
+        },
+        "recent": {
+            "last_position": {
+                "x": 35,
+                "y": 431
+            },
+            "last_scale": 1.0,
+            "internal_clock_offset": 0
+        },
+        "saved": {}
+    },
+    "extra": {
+        "debug": false,
+        "subscriptions": {
+            "on_time_tick": true,
+            "on_app_change": false,
+            "on_audio_update": false,
+            "on_keybind": false
         }
     },
     "settings_schema": {
@@ -85,42 +112,33 @@
                 "analog"
             ]
         },
-        "style.use24HourFormat": {
+        "style.frame_style": {
+            "label": "Frame Style",
+            "type": "select",
+            "options": [
+                "window",
+                "floating"
+            ]
+        },
+        "style.use_24_hour_format": {
             "label": "Use 24h Format",
             "type": "toggle"
         },
-        "style.showSeconds": {
+        "style.show_seconds": {
             "label": "Show Seconds",
             "type": "toggle"
         },
-        "style.showDate": {
+        "style.show_date": {
             "label": "Show Date",
             "type": "toggle"
         },
-        "style.dateFormat": {
+        "style.date_format": {
             "label": "Date Format",
             "type": "text",
             "placeholder": "MM/DD/YYYY"
         }
     },
-    "state": {
-        "lastPosition": {
-            "x": 35,
-            "y": 431
-        },
-        "lastScale": 1.0,
-        "internalClockOffset": 0
-    },
-    "default_state": {
-        "internalClockOffset": 0
-    },
-    "subscriptions": {
-        "onTimeTick": true,
-        "onAppChange": false,
-        "onAudioUpdate": false,
-        "onKeybind": false
-    },
-    "extra": {
-        "debug": false
+    "behavior": {
+        "enabled": false
     }
 }

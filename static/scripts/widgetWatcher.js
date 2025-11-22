@@ -27,7 +27,7 @@ async function watchWidgets() {
             // Save new snapshot
             savedManifests[widget.name] = widget;
 
-            if (widget.behavior.enabled) {
+            if (widget.widget_features.behavior.enabled) {
                 // Load widget into container (idempotent)
                 await Utils.loadWidget(widget, document.getElementById('widget-container'));
                 

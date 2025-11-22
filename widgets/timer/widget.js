@@ -1,7 +1,8 @@
 // clock widget.js
 
 (function () {
-    let root, displayEl, minutesInput, secondsInput;
+    let root, displayEl, hoursEl, minutesEl, secondsEl, msEl;
+    let add30Btn, add1mBtn, add10mBtn, toggleCountup;
     let startBtn, pauseBtn, resetBtn;
     let manifest, config;
 
@@ -19,17 +20,49 @@
     function formatTime(ms, showMs) {
         ms = Math.max(0, Math.floor(ms));
         const totalSec = Math.floor(ms / 1000);
-        const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+        const hh = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+        const mm = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
         const ss = String(totalSec % 60).padStart(2, '0');
-        if (showMs) {
-            const msPart = String(Math.floor((ms % 1000) / 10)).padStart(2, '0');
-            return `${mm}:${ss}.${msPart}`;
-        }
-        return `${mm}:${ss}`;
+        const msPart = String(Math.floor((ms % 1000) / 10)).padStart(2, '0');
+        return showMs ? `${hh}:${mm}:${ss}.${msPart}` : `${hh}:${mm}:${ss}`;
     }
 
+    function pad(n, len = 2) { return String(n).padStart(len, '0'); }
+
     function updateDisplay() {
-        displayEl.textContent = formatTime(remainingMs, config.showMilliseconds);
+        // Update the segmented display elements
+        if (!displayEl) return;
+        const showMs = !!config.showMilliseconds;
+        const totalMs = Math.max(0, Math.floor(remainingMs));
+        const totalSec = Math.floor(totalMs / 1000);
+        const hh = Math.floor(totalSec / 3600);
+        const mm = Math.floor((totalSec % 3600) / 60);
+        const ss = totalSec % 60;
+        const msPart = Math.floor((totalMs % 1000) / 10);
+
+        if (hoursEl) hoursEl.textContent = pad(hh, 2);
+        if (minutesEl) minutesEl.textContent = pad(mm, 2);
+        if (secondsEl) secondsEl.textContent = pad(ss, 2);
+        if (msEl) msEl.textContent = pad(msPart, 2);
+    }
+
+    function setSegmentsEditable(editable) {
+        const state = !!editable;
+        [hoursEl, minutesEl, secondsEl, msEl].forEach(el => {
+            if (!el) return;
+            el.contentEditable = state ? 'true' : 'false';
+            el.classList.toggle('editable', state);
+        });
+    }
+
+    function parseSegmentsToMs() {
+        try {
+            const hh = Math.max(0, parseInt(hoursEl?.textContent || '0') || 0);
+            const mm = Math.max(0, parseInt(minutesEl?.textContent || '0') || 0);
+            const ss = Math.max(0, parseInt(secondsEl?.textContent || '0') || 0);
+            const msPart = Math.max(0, parseInt(msEl?.textContent || '0') || 0);
+            return ((hh * 3600) + (mm * 60) + ss) * 1000 + (msPart * 10);
+        } catch (e) { return 0; }
     }
 
     function tick() {
@@ -44,10 +77,13 @@
             if (remainingMs <= 0) {
                 remainingMs = 0;
                 stopInterval();
-                Utils.sendMessage('info', `[widget:${manifest.name}] Timer finished`, 4, manifest.name);
+                Utils.sendMessage('debug', `[widget:${manifest.name}] Timer finished`, 4, manifest.name);
             }
         }
         updateDisplay();
+
+        // Allow editing only when not running
+        setSegmentsEditable(!running);
     }
 
     function startInterval() {
@@ -55,8 +91,9 @@
         running = true;
         lastTick = Date.now();
         intervalId = setInterval(tick, config.showMilliseconds ? 50 : 250);
-        Utils.sendMessage('info', `[widget:${manifest.name}] Timer started`, 3, manifest.name);
+        Utils.sendMessage('debug', `[widget:${manifest.name}] Timer started`, 3, manifest.name);
         schedulePersist();
+        setSegmentsEditable(false);
     }
 
     function stopInterval() {
@@ -66,6 +103,7 @@
             intervalId = null;
         }
         schedulePersist();
+        setSegmentsEditable(true);
     }
 
     function resetTimer() {
@@ -76,16 +114,23 @@
         // Reset to configured/default duration
         remainingMs = msFromConfig(manifest.unique_config?.timer || manifest.config || config);
         updateDisplay();
-        Utils.sendMessage('info', `[widget:${manifest.name}] Timer reset`, 3, manifest.name);
+        Utils.sendMessage('debug', `[widget:${manifest.name}] Timer reset`, 3, manifest.name);
 
-        // Persist immediately to avoid races where older pending saves overwrite this reset
+        // Persist immediately (sequentially) to avoid races where older pending saves overwrite this reset
         try {
             const secs = Math.ceil(Math.max(0, remainingMs) / 1000);
-            Update.manifest(null, manifest, manifest.name, "state.remainingSeconds", secs);
-            Update.manifest(null, manifest, manifest.name, "state.running", false);
+            (async () => {
+                try {
+                    await Update.manifest(null, manifest, manifest.name, "states.saved.remainingSeconds", secs);
+                    await Update.manifest(null, manifest, manifest.name, "states.saved.running", false);
+                } catch (e) {
+                    Utils.sendMessage('warn', `[widget:${manifest?.name}] Immediate persist on reset failed: ${e}`, 4, manifest?.name);
+                    // Fallback to debounced persist
+                    schedulePersist(500);
+                }
+            })();
         } catch (e) {
-            Utils.sendMessage('warn', `[widget:${manifest?.name}] Immediate persist on reset failed: ${e}`, 4, manifest?.name);
-            // Fallback to debounced persist
+            // If something synchronous throws, fallback to debounced persist
             schedulePersist(500);
         }
     }
@@ -95,13 +140,12 @@
         try {
             if (!manifest) return;
             if (_persistTimeout) clearTimeout(_persistTimeout);
-            _persistTimeout = setTimeout(() => {
+            _persistTimeout = setTimeout(async () => {
                 try {
-                    // Persist remaining seconds (rounded up) and running flag
+                    // Persist remaining seconds (rounded up) and running flag sequentially
                     const secs = Math.ceil(Math.max(0, remainingMs) / 1000);
-                    // Use Update.manifest flexible signature: (null, manifest, widgetName, path, value)
-                    Update.manifest(null, manifest, manifest.name, "state.remainingSeconds", secs);
-                    Update.manifest(null, manifest, manifest.name, "state.running", running);
+                    await Update.manifest(null, manifest, manifest.name, "states.saved.remainingSeconds", secs);
+                    await Update.manifest(null, manifest, manifest.name, "states.saved.running", running);
                 } catch (e) {
                     Utils.sendMessage('warn', `[widget:${manifest?.name}] Failed to persist timer state: ${e}`, 4, manifest?.name);
                 }
@@ -113,7 +157,7 @@
 
     function initWidget(manifestData, rootEl) {
         manifest = manifestData;
-        config = manifest.config || manifest.unique_config?.timer || manifest.unique_config || {};
+        config = manifest.unique_config?.timer || manifest.unique_config || {};
 
         Utils.sendMessage('debug', `Initializing Timer widget "${manifest.name}"`, 8, manifest.name);
 
@@ -124,32 +168,88 @@
         }
 
         displayEl = root.querySelector('#timer-display');
-        minutesInput = root.querySelector('#timer-minutes');
-        secondsInput = root.querySelector('#timer-seconds');
+        hoursEl = root.querySelector('#t-hours');
+        minutesEl = root.querySelector('#t-minutes');
+        secondsEl = root.querySelector('#t-seconds');
+        msEl = root.querySelector('#t-ms');
+        add30Btn = root.querySelector('#add-30s');
+        add1mBtn = root.querySelector('#add-1m');
+        add10mBtn = root.querySelector('#add-10m');
+        toggleCountup = root.querySelector('#toggle-countup');
         startBtn = root.querySelector('#timer-start');
         pauseBtn = root.querySelector('#timer-pause');
         resetBtn = root.querySelector('#timer-reset');
 
         if (!displayEl) throw new Error('Timer display element missing');
 
-        // Wire up buttons
-        startBtn && startBtn.addEventListener('click', () => {
-            // set remaining from inputs if currently zero
-            if (!running && remainingMs <= 0) {
-                const m = Number(minutesInput?.value || 0);
-                const s = Number(secondsInput?.value || 0);
-                remainingMs = Math.max(0, (Math.floor(m) * 60 + Math.floor(s)) * 1000);
-            }
-            if (remainingMs <= 0 && config.autoStart === false && !config.countUp) {
-                Utils.sendMessage('warn', `[widget:${manifest.name}] Duration is zero; set minutes/seconds or update defaultSeconds`, 4, manifest.name);
-                return;
-            }
-            startInterval();
+        const sanitizeSeg = el => {
+            if (!el) return;
+            // keep only digits, limit lengths
+            el.textContent = (el.textContent || '').replace(/[^0-9]/g, '').slice(0, el.id === 't-ms' ? 2 : 3) || '0';
+        };
+
+        // When user edits segments, update remainingMs (only when not running)
+        [hoursEl, minutesEl, secondsEl, msEl].forEach(el => {
+            if (!el) return;
+            el.addEventListener('input', () => {
+                sanitizeSeg(el);
+                if (!running) {
+                    remainingMs = parseSegmentsToMs();
+                    updateDisplay();
+                }
+            });
+            el.addEventListener('blur', () => { sanitizeSeg(el); if (!running) { remainingMs = parseSegmentsToMs(); updateDisplay(); schedulePersist(300); } });
+            el.addEventListener('keypress', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); el.blur(); } });
         });
 
-        pauseBtn && pauseBtn.addEventListener('click', () => {
+        // Quick-add buttons
+        add30Btn && add30Btn.addEventListener('click', async () => { remainingMs += 30000; updateDisplay(); schedulePersist(); try { await Update.manifest(null, manifest, manifest.name, 'states.saved.remainingSeconds', Math.ceil(remainingMs/1000)); } catch(e){} });
+        add1mBtn && add1mBtn.addEventListener('click', async () => { remainingMs += 60000; updateDisplay(); schedulePersist(); try { await Update.manifest(null, manifest, manifest.name, 'states.saved.remainingSeconds', Math.ceil(remainingMs/1000)); } catch(e){} });
+        add10mBtn && add10mBtn.addEventListener('click', async () => { remainingMs += 600000; updateDisplay(); schedulePersist(); try { await Update.manifest(null, manifest, manifest.name, 'states.saved.remainingSeconds', Math.ceil(remainingMs/1000)); } catch(e){} });
+
+        // Toggle countUp mode using a button that switches text (persists into unique_config.timer.countUp)
+        if (toggleCountup) {
+            const setToggleText = () => { toggleCountup.textContent = config.countUp ? 'Count Up' : 'Count Down'; };
+            setToggleText();
+            toggleCountup.addEventListener('click', async () => {
+                config.countUp = !config.countUp;
+                setToggleText();
+                try { await Update.manifest(null, manifest, manifest.name, 'unique_config.timer.countUp', config.countUp); } catch (e) { Utils.sendMessage('warn', `Failed to persist countUp setting: ${e}`, 4, manifest.name); }
+            });
+        }
+
+        // Start handler — ensure segments applied and persist running=true
+        startBtn && startBtn.addEventListener('click', async () => {
+            if (!running && remainingMs <= 0 && !config.countUp) {
+                // Try to read from segments
+                remainingMs = parseSegmentsToMs();
+            }
+            if (remainingMs <= 0 && !config.countUp) {
+                Utils.sendMessage('warn', `[widget:${manifest.name}] Duration is zero; edit time or use quick-add`, 4, manifest.name);
+                return;
+            }
+
+            startInterval();
+            try {
+                await Update.manifest(null, manifest, manifest.name, 'states.saved.running', true);
+                await Update.manifest(null, manifest, manifest.name, 'states.saved.remainingSeconds', Math.ceil(Math.max(0, remainingMs) / 1000));
+            } catch (e) {
+                Utils.sendMessage('warn', `[widget:${manifest?.name}] Failed to persist running state on start: ${e}`, 4, manifest?.name);
+            }
+        });
+
+        // Pause handler — ensure we persist running=false and remainingSeconds
+        pauseBtn && pauseBtn.addEventListener('click', async () => {
             stopInterval();
-            Utils.sendMessage('info', `[widget:${manifest.name}] Timer paused`, 3, manifest.name);
+            Utils.sendMessage('debug', `[widget:${manifest.name}] Timer paused`, 3, manifest.name);
+            try {
+                await Update.manifest(null, manifest, manifest.name, 'states.saved.remainingSeconds', Math.ceil(Math.max(0, remainingMs) / 1000));
+                await Update.manifest(null, manifest, manifest.name, 'states.saved.running', false);
+            } catch (e) {
+                Utils.sendMessage('warn', `[widget:${manifest?.name}] Failed to persist paused state: ${e}`, 4, manifest?.name);
+                // fallback to debounced persist
+                schedulePersist();
+            }
         });
 
         resetBtn && resetBtn.addEventListener('click', () => {
@@ -165,16 +265,16 @@
 
         // initialize: prefer persisted state when available
         try {
-            const persistedSec = manifest.state?.remainingSeconds;
-            const persistedRunning = manifest.state?.running;
+            const persistedSec = manifest.states.saved?.remainingSeconds;
+            const persistedRunning = manifest.states.saved?.running;
             if (typeof persistedSec === 'number') {
                 remainingMs = Math.max(0, Math.floor(persistedSec * 1000));
             } else {
-                remainingMs = msFromConfig(manifest.unique_config?.timer || manifest.config || config);
+                remainingMs = msFromConfig(manifest.unique_config?.timer);
             }
             running = !!persistedRunning;
         } catch (e) {
-            remainingMs = msFromConfig(manifest.unique_config?.timer || manifest.config || config);
+            remainingMs = msFromConfig(manifest.unique_config?.timer);
             running = false;
         }
 

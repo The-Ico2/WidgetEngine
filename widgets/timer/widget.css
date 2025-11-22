@@ -36,3 +36,22 @@
 .timer-btn:hover { background: rgba(255,255,255,0.12); }
 
 .timer-root { display: inline-block; }
+
+.timer-display .time-seg {
+    display: inline-block;
+    min-width: 20px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: text;
+}
+
+.timer-display .time-seg.editable {
+    background: rgba(255,255,255,0.04);
+    border: 1px dashed rgba(255,255,255,0.06);
+}
+
+.timer-display .time-seg.ms { min-width: 28px; }
+
+.quick-adds { display:inline-flex; gap:6px; margin-right:8px; }
+.mode-toggle { display:inline-flex; align-items:center; margin-right:8px; }
+.actions { display:inline-flex; gap:6px; }
