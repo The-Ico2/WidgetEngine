@@ -1,7 +1,7 @@
 {
-    "name": "Clock",
-    "id": "clock-widget",
-    "description": "Clock Display",
+    "name": "Timer",
+    "id": "timer-widget",
+    "description": "Simple countdown timer widget",
     "author": "Ico2",
     "version": "1.0.0",
     "permissions": {
@@ -32,12 +32,12 @@
     },
     "display": {
         "position": {
-            "x": 542,
-            "y": 743,
+            "x": 138,
+            "y": 105,
             "zIndex": 10
         },
         "size": {
-            "width": 200,
+            "width": 400,
             "height": 100,
             "scale": 1.0,
             "resizable": true
@@ -67,40 +67,30 @@
         }
     },
     "unique_config": {
-        "style": {
-            "type": "digital",
-            "frameStyle": "window",
-            "use24HourFormat": false,
-            "showSeconds": true,
-            "showDate": true,
-            "dateFormat": "MM/DD/YYYY"
+        "timer": {
+            "defaultSeconds": 300,
+            "showMilliseconds": false,
+            "autoStart": false,
+            "countUp": false
         }
     },
     "settings_schema": {
-        "style.type": {
-            "label": "Clock Type",
-            "type": "select",
-            "options": [
-                "digital",
-                "analog"
-            ]
+        "timer.defaultSeconds": {
+            "label": "Default Duration (seconds)",
+            "type": "number",
+            "placeholder": "300"
         },
-        "style.use24HourFormat": {
-            "label": "Use 24h Format",
+        "timer.showMilliseconds": {
+            "label": "Show Milliseconds",
             "type": "toggle"
         },
-        "style.showSeconds": {
-            "label": "Show Seconds",
+        "timer.autoStart": {
+            "label": "Start Automatically",
             "type": "toggle"
         },
-        "style.showDate": {
-            "label": "Show Date",
+        "timer.countUp": {
+            "label": "Count Up (stopwatch)",
             "type": "toggle"
-        },
-        "style.dateFormat": {
-            "label": "Date Format",
-            "type": "text",
-            "placeholder": "MM/DD/YYYY"
         }
     },
     "state": {
@@ -109,10 +99,12 @@
             "y": 431
         },
         "lastScale": 1.0,
-        "internalClockOffset": 0
+        "remainingSeconds": 294,
+        "running": false
     },
     "default_state": {
-        "internalClockOffset": 0
+        "remainingSeconds": 300,
+        "running": false
     },
     "subscriptions": {
         "onTimeTick": true,

@@ -13,33 +13,35 @@ window._deletedWidgets = window._deletedWidgets || new Set();
                 enumerable: true,
                 get() { return current; },
                 set(fn) {
-                    try {
                         try {
-                            if (typeof Utils !== 'undefined' && Utils && typeof Utils.sendMessage === 'function') {
-                                const name = fn && fn.name ? fn.name : '<anonymous>';
-                                Utils.sendMessage('warn', `Diagnostic: window.WidgetInit assigned by a widget script. (${name})`, 6);
+                            const name = fn && fn.name ? fn.name : '<anonymous>';
+                            const msg = `Diagnostic: window.WidgetInit assigned by a widget script. (${name})`;
+                            if (window.Utils && typeof window.Utils.sendMessage === 'function') {
+                                try { window.Utils.sendMessage('warn', msg, 6); } catch (_) {}
                             } else {
-                                console.warn('Diagnostic: window.WidgetInit assigned by a widget script.', fn);
+                                window.__pendingMessages = window.__pendingMessages || [];
+                                window.__pendingMessages.push({ type: 'warn', message: msg, duration: 6 });
                             }
                         } catch (e) {
-                            try { console.warn('Diagnostic: window.WidgetInit assigned by a widget script.', fn); } catch (_) {}
+                            // swallow; diagnostics must not throw
                         }
-                    } catch (e) {}
                     current = fn;
                 }
             });
         }
-        } catch (e) {
-        // Don't break if defineProperty fails
-        try {
-            if (typeof Utils !== 'undefined' && Utils && typeof Utils.sendMessage === 'function') {
-                Utils.sendMessage('error', `Failed to install WidgetInit diagnostic: ${e}`, 6);
-            } else {
-                console.error('Failed to install WidgetInit diagnostic:', e);
+            } catch (e) {
+            // Don't break if defineProperty fails — diagnostics are best-effort and must not throw
+            try {
+                const msg = `Failed to install WidgetInit diagnostic: ${e}`;
+                if (window.Utils && typeof window.Utils.sendMessage === 'function') {
+                    try { window.Utils.sendMessage('error', msg, 6); } catch (_) {}
+                } else {
+                    window.__pendingMessages = window.__pendingMessages || [];
+                    window.__pendingMessages.push({ type: 'error', message: msg, duration: 6 });
+                }
+            } catch (_) {
+                // swallow
             }
-        } catch (_) {
-            try { console.error('Failed to install WidgetInit diagnostic:', e); } catch (_) {}
-        }
     }
 })();
 const widgetContainer = document.getElementById('widget-container')
@@ -1046,6 +1048,16 @@ window.Utils = (() => {
             }
         },
     };
+
+    // Flush any diagnostic messages queued before Utils was available
+    try {
+        if (window.__pendingMessages && Array.isArray(window.__pendingMessages)) {
+            for (const m of window.__pendingMessages) {
+                try { Utils.sendMessage(m.type, m.message, m.duration, m.widgetName); } catch (_) {}
+            }
+            window.__pendingMessages = [];
+        }
+    } catch (_) {}
 
     return Utils;
 })();

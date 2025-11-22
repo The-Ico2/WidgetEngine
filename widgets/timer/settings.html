@@ -1,0 +1,38 @@
+<div class="settings-root timer-settings">
+	<label>Default duration (seconds):
+		<input type="number" id="setting-default-seconds" min="0" value="300" />
+	</label>
+	<label>Show milliseconds:
+		<input type="checkbox" id="setting-show-ms" />
+	</label>
+	<label>Start automatically:
+		<input type="checkbox" id="setting-auto-start" />
+	</label>
+	<label>Count up (stopwatch):
+		<input type="checkbox" id="setting-count-up" />
+	</label>
+	<div style="margin-top:8px">
+		<button id="settings-save">Save</button>
+	</div>
+</div>
+
+<script>
+// Simple settings page glue: when Save is clicked, post a message to parent to update manifest (engine-specific)
+document.getElementById('settings-save')?.addEventListener('click', function () {
+	const vals = {
+		'timer.defaultSeconds': Number(document.getElementById('setting-default-seconds').value || 300),
+		'timer.showMilliseconds': !!document.getElementById('setting-show-ms').checked,
+		'timer.autoStart': !!document.getElementById('setting-auto-start').checked,
+		'timer.countUp': !!document.getElementById('setting-count-up').checked,
+	};
+	// The engine's settings integration may expect a message; use postMessage as a generic mechanism
+	if (window.parent && window.parent !== window) {
+		window.parent.postMessage({ type: 'widget-settings-update', payload: vals }, '*');
+	} else if (window.Update && typeof Update.manifest === 'function') {
+		// Try to call Update.manifest if available (engine helper)
+		try { Update.manifest(null, vals); } catch(e) { console.error(e); }
+	} else {
+		alert('Settings saved (local only)');
+	}
+});
+</script>
