@@ -6,8 +6,19 @@ window.SettingsRenderer = {
         container.innerHTML = "";
 
         // Load manifest
-        const res = await fetch(`/widgets/${widgetName}/manifest.jsonc`);
-        const manifest = await res.json();
+        let manifest;
+        try {
+            const res = await fetch(`/widgets/${widgetName}/manifest.jsonc`);
+            manifest = await res.json();
+        } catch (e) {
+            Utils.sendMessage("error", `Failed to load manifest for widget "${widgetName}": ${e}`);
+            return;
+        }
+
+        const debug = manifest.extra?.debug;
+        console.log (debug)
+
+        if (debug) Utils.sendMessage("debug", `Rendering settings for widget "${widgetName}"`, 5);
 
         const title = document.createElement("h2");
         title.textContent = manifest.label;
@@ -100,8 +111,17 @@ window.SettingsRenderer = {
         // Save to backend
         //
         async function update(section, key, value) {
-            console.log("UPDATE:", widgetName, section, key, value);
-            await Update.manifest(null, manifest, widgetName, section ? `${section}.${key}` : key, value);
+            if (debug) {
+                Utils.sendMessage("debug", `Updating widget "${widgetName}" - ${section ? section + "." : ""}${key}: ${value}`, 5);
+            }
+            try {
+                await Update.manifest(null, manifest, widgetName, section ? `${section}.${key}` : key, value);
+                if (debug) {
+                    Utils.sendMessage("debug", `Update applied successfully for widget "${widgetName}"`, 5);
+                }
+            } catch (e) {
+                Utils.sendMessage("error", `Failed to update widget "${widgetName}": ${e}`);
+            }
         }
 
         function toggle(label, value, cb) {
@@ -112,6 +132,9 @@ window.SettingsRenderer = {
             el.onclick = () => {
                 value = !value;
                 el.textContent = label + ": " + (value ? "ON" : "OFF");
+                if (debug) {
+                    Utils.sendMessage("debug", `Toggled "${label}" to ${value}`, 3);
+                }
                 cb(value);
             };
             return el;
@@ -149,5 +172,7 @@ window.SettingsRenderer = {
             el.onchange = () => update("config", key, el.value);
             return field(key, el);
         }
+
+        if (debug) Utils.sendMessage("debug", `Settings UI rendered for widget "${widgetName}"`, 5);
     }
 };

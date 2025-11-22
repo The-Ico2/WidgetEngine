@@ -26,7 +26,6 @@ def discover_widgets():
 
         manifest_path = os.path.join(widget_path, "manifest.jsonc")
         if not os.path.exists(manifest_path):
-            print(f"[WidgetsAPI] No manifest found in: {folder}")
             continue
 
         manifest = load_manifest(manifest_path)
@@ -35,7 +34,6 @@ def discover_widgets():
 
         manifest["name"] = folder  # ensure folder name is the internal ID
         widgets.append(manifest)
-        print(f"[WidgetsAPI] Registered widget: {folder}")
     return widgets
 
 
@@ -108,38 +106,13 @@ def save_manifest(path, updated_data):
 def api_widgets():
     return jsonify(discover_widgets())
 
-# POST /api/widgets/<widget_name> → update manifest
-@widgets_bp.route("/api/widgets/<widget_name>", methods=["POST"])
-def update_widget_manifest(widget_name):
-    folder = os.path.join(WIDGETS_DIR, widget_name)
-    manifest_path_json = os.path.join(folder, "manifest.json")
-    manifest_path_jsonc = os.path.join(folder, "manifest.jsonc")
-
-    if os.path.exists(manifest_path_json):
-        manifest_path = manifest_path_json
-    elif os.path.exists(manifest_path_jsonc):
-        manifest_path = manifest_path_jsonc
-    else:
-        abort(404, "Widget not found")
-
-    data = request.get_json()
-    if not data:
-        abort(400, "Invalid JSON payload")
-
-    # Use your JSONC-safe writer
-    if not save_manifest(manifest_path, data):
-        abort(500, "Failed to write manifest")
-
-    updated = load_manifest(manifest_path)
-    return jsonify(updated), 200
-
-# PATCH /api/widgets/<widget>/<setting> → update single setting
-@widgets_bp.route("/api/widgets/<widget>/<setting>", methods=["PATCH", "OPTIONS"])
-def update_widget_setting(widget, setting):
-    if request.method == "OPTIONS":
-        return ("", 204)
-
-    widget_dir = os.path.join(WIDGETS_DIR, widget)
+# GET, POST, & PATCH /api/widgets/<widget>
+@widgets_bp.route("/api/widgets/<widget_name>", methods=["GET", "POST", "PATCH"])
+def update_widget(widget_name):
+    # ------------------------------------------------
+    # Locate manifest file (.jsonc preferred)
+    # ------------------------------------------------
+    widget_dir = os.path.join(WIDGETS_DIR, widget_name)
     manifest_jsonc = os.path.join(widget_dir, "manifest.jsonc")
     manifest_json = os.path.join(widget_dir, "manifest.json")
 
@@ -150,54 +123,70 @@ def update_widget_setting(widget, setting):
     else:
         return jsonify({"error": "Widget not found"}), 404
 
-    manifest = load_manifest(manifest_path)
-    if manifest is None:
-        return jsonify({"error": "Failed to load manifest"}), 500
+    # ------------------------------------------------
+    # GET → return manifest JSON
+    # ------------------------------------------------
+    if request.method == "GET":
+        manifest = load_manifest(manifest_path)
+        if manifest is None:
+            return jsonify({"error": "Failed to load manifest"}), 500
+        return jsonify(manifest), 200
 
-    data = request.json or {}
+    # ------------------------------------------------
+    # Parse request body
+    # ------------------------------------------------
+    data = request.get_json() or {}
 
-    # ----------------------------------------------------
-    # SPECIAL CASE: POSITION USES {x,y} NOT {value}
-    # ----------------------------------------------------
-    if setting == "position":
-        if "x" not in data or "y" not in data:
-            return jsonify({"error": "Missing x/y"}), 400
+    # ------------------------------------------------
+    # POST → full replacement
+    # ------------------------------------------------
+    if request.method == "POST":
+        if not isinstance(data, dict) or not data:
+            return jsonify({"error": "Invalid JSON payload"}), 400
 
-        manifest["position"] = {
-            "x": int(data["x"]),
-            "y": int(data["y"])
-        }
+        if not save_manifest(manifest_path, data):
+            return jsonify({"error": "Failed to write manifest"}), 500
 
+        updated = load_manifest(manifest_path)
+        return jsonify(updated), 200
+
+    # ------------------------------------------------
+    # PATCH → partial nested update (path + value)
+    # ------------------------------------------------
+    if request.method == "PATCH":
+        path = data.get("path")
+        value = data.get("value")
+
+        if not path:
+            return jsonify({"error": "Missing 'path'"}), 400
+        if "value" not in data:
+            return jsonify({"error": "Missing 'value'"}), 400
+
+        # Load current manifest
+        manifest = load_manifest(manifest_path)
+        if manifest is None:
+            return jsonify({"error": "Failed to load manifest"}), 500
+
+        # Apply dot-notation update
+        keys = path.split(".")
+        obj = manifest
+
+        for key in keys[:-1]:
+            if key not in obj or not isinstance(obj[key], dict):
+                obj[key] = {}
+            obj = obj[key]
+
+        obj[keys[-1]] = value
+
+        # Save back
         if not save_manifest(manifest_path, manifest):
-            return jsonify({"error": "Failed to save JSONC"}), 500
+            return jsonify({"error": "Failed to save manifest"}), 500
 
         return jsonify({
             "status": "ok",
-            "updated": manifest["position"]
+            "updated": { "path": path, "value": value }
         }), 200
 
-    # ----------------------------------------------------
-    # GENERAL SETTING: requires {value: ...}
-    # ----------------------------------------------------
-    if "value" not in data:
-        return jsonify({"error": "Missing 'value' field"}), 400
-
-    # Setting must exist in manifest
-    if setting not in manifest:
-        return jsonify({
-            "error": f"Setting '{setting}' not found",
-            "alert": True
-        }), 400
-
-    manifest[setting] = data["value"]
-
-    if not save_manifest(manifest_path, manifest):
-        return jsonify({"error": "Failed to save JSONC"}), 500
-
-    return jsonify({
-        "status": "ok",
-        "updated": manifest[setting]
-    }), 200
 
 # GET /widgets/<widgetName>/<path:filename>
 @widgets_bp.route("/widgets/<widget_name>/<path:filename>")

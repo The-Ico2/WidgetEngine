@@ -1,12 +1,11 @@
 // widgetUtils.js
-const widgetContainer = document.getElementById('#widget-container')
+window.ActiveWidgets = {};
+const widgetContainer = document.getElementById('widget-container')
 if (!widgetContainer) {
-    console.error("#widget-container not found!");
+    Utils.sendMessage("error", `#widget-container not found!`)
 }
-
 window.Update = (() => {
     const Update = {
-
         /**
          * Update manifest and push changes to backend.
          * Supports nested keys in dot notation (e.g., "unique_config.style.use24HourFormat").
@@ -21,7 +20,7 @@ window.Update = (() => {
             // 1. Get manifest from your global widget cache
             const manifest = window.ActiveWidgets?.[name]?.manifest;
             if (!manifest) {
-                console.error(`Manifest for ${name} not found`);
+                Utils.sendMessage("error", `Manifest for ${name} not found`)
                 return;
             }
 
@@ -39,7 +38,7 @@ window.Update = (() => {
                 try {
                     Update.widget(null, manifest);  
                 } catch (e) {
-                    console.warn("Widget live update skipped:", e);
+                    Utils.sendMessage("warn", `Widget live update skipped: ${e}`)
                 }
             }
 
@@ -52,9 +51,9 @@ window.Update = (() => {
                 });
 
                 if (!res.ok)
-                    console.error(`Failed manifest update for ${name}/${path}:`, await res.text());
-            } catch (err) {
-                console.error(`Error updating manifest for '${name}':`, err);
+                    Utils.sendMessage("error", `Failed manifest update for ${name}/${path}: ${await res.text()}`);
+            } catch (e) {
+                Utils.sendMessage("error", `Error updating manifest for '${name}': ${e}`);
             }
         },
 
@@ -217,12 +216,13 @@ window.Apply = (() => {
 
                         const hooks = manifest.behavior.lifecycle;
 
-                        // Call onInit immediately if enabled
-                        if (hooks.onInit && window.WidgetInit) {
+                        // Call onInit immediately if enabled and not yet initialized
+                        if (hooks.onInit && window.WidgetInit && !root._initialized) {
                             try {
                                 window.WidgetInit(manifest, root);
+                                root._initialized = true; // mark as initialized
                             } catch (e) {
-                                console.error(`Error during onInit for widget ${manifest.name}:`, e);
+                                Utils.sendMessage("error", `Error during onInit for widget ${manifest.name}: ${e}`);
                             }
                         }
 
@@ -248,10 +248,10 @@ window.Apply = (() => {
                                         if (window.WidgetResize) await window.WidgetResize(manifest, root, config.width, config.height);
                                         break;
                                     default:
-                                        console.warn(`Unknown lifecycle hook: ${hookName}`);
+                                        Utils.sendMessage("warn", `Unknown lifecycle hook: ${hookName}`);
                                 }
-                            } catch (err) {
-                                console.error(`Error during ${hookName} for widget ${manifest.name}:`, err);
+                            } catch (e) {
+                                Utils.sendMessage("error", `Error during ${hookName} for widget ${manifest.name}: ${e}`);
                             }
                         };
                         break;
@@ -260,7 +260,7 @@ window.Apply = (() => {
                         break;
                 }
             } catch (e) {
-                console.error("applyBehaviorRules failed", e);
+                Utils.sendMessage("error", `applyBehaviorRules failed: ${e}`)
             }
         },
 
@@ -300,17 +300,17 @@ window.Apply = (() => {
                                     : baseFontSize + "px";
                             }
                         } else {
-                            console.warn(`Resizing is disabled for widget: ${root.dataset.widget}`);
+                            Utils.sendMessage("warn", `Resizing is disabled for widget: ${root.dataset.widget}`, 2000)
                         }
                         break;
                     }
 
                     default:
-                        console.warn(`Unknown DisplayRules type: ${type}`);
+                        Utils.sendMessage("warn", `Unknown DisplayRules type: ${type}`)
                         break;
                 }
             } catch (e) {
-                console.error("applyDisplayRules failed", e);
+                Utils.sendMessage("error", `applyDisplayRules failed: ${e}`)
             }
         },
 
@@ -394,12 +394,12 @@ window.Apply = (() => {
                         break;
 
                     default:
-                        console.warn(`Unknown StylingRules type: ${type}`);
+                        Utils.sendMessage("warn", `Unknown StylingRules type: ${type}`)
                         break;
                 }
 
             } catch(e) {
-                console.error("applyStylingRules failed", e);
+                Utils.sendMessage("error", `applyStylingRules failed: ${e}`)
             }
 
             // ---------------- Helper ----------------
@@ -446,8 +446,7 @@ window.Apply = (() => {
                 console.log(`UniqueConfig updated: ${type} =`, config.value);
 
             } catch (e) {
-                console.error("applyUniqueConfig failed", e);
-                Utils.sendError(`Error updating UniqueConfig: ${e.message}`);
+                Utils.sendError(`Error updating UniqueConfig: ${e}`);
             }
         },
 
@@ -457,45 +456,79 @@ window.Apply = (() => {
 })();
 
 window.Utils = (() => {
+    const activeChips = []; // keep track of active messages
+
     const Utils = {
-        sendError: function(message, duration = 4000) {
+        sendMessage: function(type, message, duration = 4) {
             try {
-                // Create the error chip
                 const chip = document.createElement("div");
-                chip.className = "error-chip";
+                chip.className = `msg-chip msg-${type}`;
                 chip.textContent = message;
 
-                // Basic styles (can override with CSS if desired)
-                Object.assign(chip.style, {
+                // -------------------------
+                // Built-in fallback styling
+                // -------------------------
+                const baseStyle = {
                     position: "fixed",
-                    bottom: "20px",
                     right: "20px",
-                    backgroundColor: "rgba(255, 50, 50, 0.9)",
-                    color: "#fff",
                     padding: "10px 15px",
-                    borderRadius: "5px",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-                    zIndex: 9999,
-                    fontFamily: "sans-serif",
+                    borderRadius: "6px",
+                    color: "#fff",
+                    fontFamily: "Inter, sans-serif",
                     fontSize: "14px",
+                    boxShadow: "0 2px 10px rgba(0,0,0,0.25)",
+                    zIndex: 99999,
                     opacity: 0,
-                    transition: "opacity 0.3s ease"
+                    transition: "opacity 0.25s ease, transform 0.25s ease",
+                    transform: "translateY(10px)"
+                };
+
+                const typeStyles = {
+                    error:   { backgroundColor: "rgba(220,53,69,0.95)" },    
+                    warning: { backgroundColor: "rgba(255,193,7,0.95)", color: "#222" },
+                    success: { backgroundColor: "rgba(40,167,69,0.95)" },
+                    info:    { backgroundColor: "rgba(23,162,184,0.95)" },
+                    debug:   { backgroundColor: "rgba(108,117,125,0.95)" }
+                };
+
+                Object.assign(chip.style, baseStyle, typeStyles[type] || typeStyles.info);
+
+                // Compute vertical offset based on existing chips
+                const spacing = 10; // px between messages
+                let bottomOffset = 20;
+                activeChips.forEach(c => {
+                    bottomOffset += c.offsetHeight + spacing;
                 });
+                chip.style.bottom = bottomOffset + "px";
 
                 document.body.appendChild(chip);
+                activeChips.push(chip);
 
                 // Fade in
                 requestAnimationFrame(() => {
                     chip.style.opacity = 1;
+                    chip.style.transform = "translateY(0)";
                 });
 
-                // Fade out and remove after duration
+                // Fade out + remove
                 setTimeout(() => {
                     chip.style.opacity = 0;
-                    chip.addEventListener("transitionend", () => chip.remove());
-                }, duration);
-            } catch (err) {
-                console.error("Utils.sendError failed:", err);
+                    chip.style.transform = "translateY(10px)";
+                    chip.addEventListener("transitionend", () => {
+                        chip.remove();
+                        const index = activeChips.indexOf(chip);
+                        if (index !== -1) activeChips.splice(index, 1);
+                        // adjust positions of remaining chips
+                        let offset = 20;
+                        activeChips.forEach(c => {
+                            c.style.bottom = offset + "px";
+                            offset += c.offsetHeight + spacing;
+                        });
+                    });
+                }, duration * 1000);
+
+            } catch (e) {
+                console.error(`Utils.sendMessage failed: ${e}`);
             }
         },
 
@@ -552,8 +585,8 @@ window.Utils = (() => {
                     }
                 }
 
-            } catch (err) {
-                console.error("Utils: loadDOMWidgets failed", err);
+            } catch (e) {
+                Utils.sendMessage("error", `applyDisplayRules failed: ${e}`)
             }
         },
         
@@ -609,7 +642,7 @@ window.Utils = (() => {
                                 await Utils.deleteWidget(entry.name);
                             }
 
-                            await Update.manifest(null, entry, entry.name, "behavior.enabled", newState);
+                            await Update.manifest(entry.name, "behavior.enabled", newState);
                         });
 
                         box.appendChild(toggle);
@@ -640,20 +673,29 @@ window.Utils = (() => {
                                 container.style.display = "none";
                             });
                         } else {
-                            console.warn(`No settings found for ${entry.name}`);
+                            Utils.sendMessage("warn", `No settings found for ${entry.name}`)
                         }
                     });
 
                     if (gridEl) gridEl.appendChild(box);
                 }
 
-            } catch (err) {
-                console.error("Utils: loadSettingsWidgets failed", err);
+            } catch (e) {
+                Utils.sendMessage("error", `Utils: loadSettingsWidgets failed: ${e}`)
             }
         },
         
         loadWidget: async function(widget, container = document.body) {
-            if (!widget || !widget.enabled) return null;
+            if (widget?.extra?.debug) {
+                if (widget.behavior?.enabled && widget.files) {
+                    // Case 1: widget exists, debug true, enabled, has manifest JSON
+                    Utils.sendMessage("debug", `Widget "${widget.name}" is enabled. Creating...`, 30);
+                } else {
+                    // Case 2: widget exists, debug true, but disabled or missing manifest
+                    Utils.sendMessage("debug", `Widget "${widget.name}" is disabled or invalid. Skipping creation.`, 30);
+                }
+            }
+
 
             const basePath = `${BACKEND_URL}/widgets/${widget.name}/`;
             let widgetRoot = null;
@@ -725,17 +767,6 @@ window.Utils = (() => {
                 }
                 didLoadScript = true;
             }
-            try {
-                if (window.WidgetInit && (scriptExists || didLoadScript)) {
-                    // some widgets expect to be initialized only once; it's OK to call again if idempotent
-                    window.WidgetInit(widget, widgetRoot);
-                } else if (!widget.files.js && window.WidgetInit) {
-                    // widgets without JS but that rely on a shared WidgetInit — call it
-                    window.WidgetInit(widget, widgetRoot);
-                }
-            } catch (e) {
-                console.error("Error calling WidgetInit:", e);
-            }
 
             return widgetRoot;
         },
@@ -778,7 +809,7 @@ window.Utils = (() => {
                 };
                 return fmt.replace(/YYYY|MM|DD/g, matched => map[matched]);
             } catch(e) {
-                console.error("formatDate failed", e);
+                Utils.sendMessage("error", `formatDate failed: ${e}`)
                 return "00/00/0000";
             }
         },
@@ -790,7 +821,7 @@ window.Utils = (() => {
             } else if (retries > 0) {
                 setTimeout(() => Utils.waitForRoot(selector, callback, retries - 1, delay), delay);
             } else {
-                console.error("root element not found after waiting");
+                Utils.sendMessage("error", `root element not found after waiting`)
             }
         },
     };
@@ -799,35 +830,133 @@ window.Utils = (() => {
 })();
 
 window.SettingsRenderer = (() => {
-
     const renderWidgetSettings = async (widgetName, container) => {
+        container.innerHTML = "";
+
+        let manifest;
         try {
-            // Fetch manifest to get the settings.html path
             const res = await fetch(`${BACKEND_URL}/api/widgets/${widgetName}`);
-            if (!res.ok) throw new Error(`Failed to load manifest for ${widgetName}`);
-            const manifest = await res.json();
-
-            if (!manifest.files || !manifest.files.settings) {
-                container.innerHTML = `<p>No settings page available for ${widgetName}</p>`;
-                return;
-            }
-
-            container.innerHTML = `<h2>${manifest.label || manifest.name} Settings</h2>`;
-
-            // Fetch the widget's settings.html
-            const htmlRes = await fetch(`${BACKEND_URL}/widgets/${widgetName}/${manifest.files.settings}`);
-            if (!htmlRes.ok) throw new Error(`Failed to load settings.html for ${widgetName}`);
-            const html = await htmlRes.text();
-
-            const settingsContainer = document.createElement("div");
-            settingsContainer.innerHTML = html;
-            container.appendChild(settingsContainer);
-
-        } catch (err) {
-            console.error(`Error rendering settings for widget ${widgetName}:`, err);
-            container.innerHTML = `<p>Error loading settings for ${widgetName}</p>`;
+            if (!res.ok) throw new Error(`Failed to load manifest for "${widgetName}"`);
+            manifest = await res.json();
+        } catch (e) {
+            Utils.sendMessage("error", `Failed to load manifest for widget "${widgetName}": ${e}`);
+            return;
         }
-    };
+
+        const debug = manifest.extra?.debug;
+
+        if (debug) Utils.sendMessage("debug", `Rendering settings for widget "${widgetName}"`, 5);
+
+        container.innerHTML = `<h2>${manifest.label || manifest.name} Settings</h2>`;
+
+        // Helper to create label + element row
+        function field(label, element) {
+            const wrap = document.createElement("div");
+            wrap.className = "setting-row";
+
+            const lbl = document.createElement("label");
+            lbl.textContent = label;
+
+            wrap.appendChild(lbl);
+            wrap.appendChild(element);
+            return wrap;
+        }
+
+        // -------------------- DYNAMIC FIELDS --------------------
+        async function update(section, key, value) {
+            if (debug) Utils.sendMessage("debug", `Updating widget "${widgetName}" - ${section ? section + "." : ""}${key}: ${value}`, 5);
+            try {
+                await Update.manifest(null, manifest, widgetName, section ? `${section}.${key}` : key, value);
+                if (debug) Utils.sendMessage("debug", `Update applied successfully for widget "${widgetName}"`, 5);
+            } catch (e) {
+                Utils.sendMessage("error", `Failed to update widget "${widgetName}": ${e}`);
+            }
+        }
+
+        function toggle(label, value, cb) {
+            const el = document.createElement("div");
+            el.className = "setting-toggle";
+            el.textContent = label + ": " + (value ? "ON" : "OFF");
+
+            el.onclick = () => {
+                value = !value;
+                el.textContent = label + ": " + (value ? "ON" : "OFF");
+                if (debug) Utils.sendMessage("debug", `Toggled "${label}" to ${value}`, 3);
+                cb(value);
+            };
+            return el;
+        }
+
+        function renderDynamicField(section, key, value) {
+            // boolean toggle
+            if (typeof value === "boolean") return toggle(key, value, v => update("config", key, v));
+            // number input
+            if (typeof value === "number") {
+                const el = document.createElement("input");
+                el.type = "number";
+                el.value = value;
+                el.onchange = () => update("config", key, Number(el.value));
+                return field(key, el);
+            }
+            // color picker
+            if (typeof value === "string" && value.startsWith("#")) {
+                const el = document.createElement("input");
+                el.type = "color";
+                el.value = value;
+                el.onchange = () => update("config", key, el.value);
+                return field(key, el);
+            }
+            // text input fallback
+            const el = document.createElement("input");
+            el.type = "text";
+            el.value = value;
+            el.onchange = () => update("config", key, el.value);
+            return field(key, el);
+        }
+
+        // -------------------- RENDER DEFAULT DYNAMIC UI --------------------
+        if (!manifest.files?.settings) {
+            // size
+            const sizeHeader = document.createElement("h3");
+            sizeHeader.textContent = "Size";
+            container.appendChild(sizeHeader);
+
+            container.appendChild(field("Width", (() => {
+                const inp = document.createElement("input"); inp.type="number"; inp.value = manifest.size.width; inp.onchange=()=>update("size","width",Number(inp.value)); return inp;
+            })()));
+
+            container.appendChild(field("Height", (() => {
+                const inp = document.createElement("input"); inp.type="number"; inp.value = manifest.size.height; inp.onchange=()=>update("size","height",Number(inp.value)); return inp;
+            })()));
+
+            container.appendChild(field("Scale", (() => {
+                const inp = document.createElement("input"); inp.type="number"; inp.step="0.1"; inp.value=manifest.size.scale; inp.onchange=()=>update("size","scale",Number(inp.value)); return inp;
+            })()));
+
+            // drag / click
+            container.appendChild(toggle("Draggable", manifest.draggable, v=>update(null,"draggable",v)));
+            container.appendChild(toggle("Click-Through", manifest["click-through"], v=>update(null,"click-through",v)));
+
+            // position
+            const posHeader = document.createElement("h3");
+            posHeader.textContent = "Position";
+            container.appendChild(posHeader);
+
+            container.appendChild(field("X", (() => { const inp=document.createElement("input"); inp.type="number"; inp.value=manifest.position.x; inp.onchange=()=>update("position","x",Number(inp.value)); return inp;})()));
+            container.appendChild(field("Y", (() => { const inp=document.createElement("input"); inp.type="number"; inp.value=manifest.position.y; inp.onchange=()=>update("position","y",Number(inp.value)); return inp;})()));
+
+            // config
+            const cfgHeader = document.createElement("h3");
+            cfgHeader.textContent = "Configuration";
+            container.appendChild(cfgHeader);
+
+            for(const [k,v] of Object.entries(manifest.config)) {
+                container.appendChild(renderDynamicField("config",k,v));
+            }
+        }
+
+        if (debug) Utils.sendMessage("debug", `Settings UI rendered for widget "${widgetName}"`, 5);
+    }
 
     return { renderWidgetSettings };
 })();

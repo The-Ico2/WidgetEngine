@@ -1,36 +1,166 @@
 {
     "name": "Settings",
+    "id": "settings-widget",
     "label": "Settings Widget",
-    "enabled": true,
+    "description": "Centralized settings management",
+    "author": "Ico2",
+    "version": "1.0.0",
+
+    "permissions": {
+        "keyboard": false,
+        "filesystem": false,
+        "network": false,
+        "overlay": true,
+        "exclusiveHotkeys": false
+    },
+
     "files": {
         "html": "widget.html",
         "css": "widget.css",
         "js": "widget.js",
         "settings": "settings.html"
     },
-    "size": {
-        "width": 600,
-        "height": 300,
-        "scale": 1.0
+
+    "behavior": {
+        "enabled": true,
+        "draggable": true,
+        "clickThrough": false,
+        "lifecycle": {
+            "onInit": true,
+            "onDestroy": true,
+            "onSettingsUpdate": true,
+            "onFocus": false,
+            "onBlur": false,
+            "onResize": false
+        }
     },
-    "draggable": true,
-    "click-through": false,
-    "position": {
-        "x": 122,
-        "y": 187
+
+    "display": {
+        "position": {
+            "x": 122,
+            "y": 187,
+            "zIndex": 10
+        },
+        "size": {
+            "width": 600,
+            "height": 300,
+            "scale": 1.0,
+            "resizable": true
+        }
     },
-    "config": {
-        "font": "Arial",
-        "fontSize": 24,
-        "fontSizeScaling": true,
-        "fontColor": "#FFFFFF",
-        "type": "digital",
-        "type2": "window",
-        "showSeconds": true,
-        "use24HourFormat": false,
-        "backgroundColor": "rgba(0, 0, 0, 0.5)",
-        "showDate": true,
-        "dateFormat": "MM/DD/YYYY",
-        "useRootVariables": false
+
+    "styling": {
+        "useRootVariables": false,
+        "font": {
+            "family": "Arial",
+            "size": "24px",
+            "color": "#FFFFFF",
+            "widgetScaling": true
+        },
+        "border": {
+            "style": "solid",
+            "width": "2px",
+            "color": "#FFFFFF"
+        },
+        "background": {
+            "color": "#000000",
+            "alpha": 0.5
+        },
+        "animation": {
+            "enabled": false,
+            "type": "fade-in",
+            "duration": 200
+        }
+    },
+
+    "unique_config": {
+        "style": {
+            "font": "Arial",
+            "fontSize": 24,
+            "fontSizeScaling": true,
+            "fontColor": "#FFFFFF",
+            "type": "digital",
+            "frameStyle": "window",
+            "showSeconds": true,
+            "use24HourFormat": false,
+            "backgroundColor": "rgba(0,0,0,0.5)",
+            "showDate": true,
+            "dateFormat": "MM/DD/YYYY",
+            "useRootVariables": false
+        }
+    },
+
+    "settings_schema": {
+        "style.type": {
+            "label": "Clock Type",
+            "type": "select",
+            "options": ["digital", "analog"]
+        },
+        "style.frameStyle": {
+            "label": "Frame Style",
+            "type": "select",
+            "options": ["window", "floating"]
+        },
+        "style.use24HourFormat": {
+            "label": "Use 24h Format",
+            "type": "toggle"
+        },
+        "style.showSeconds": {
+            "label": "Show Seconds",
+            "type": "toggle"
+        },
+        "style.showDate": {
+            "label": "Show Date",
+            "type": "toggle"
+        },
+        "style.dateFormat": {
+            "label": "Date Format",
+            "type": "text",
+            "placeholder": "MM/DD/YYYY"
+        },
+        "style.font": {
+            "label": "Font Family",
+            "type": "text"
+        },
+        "style.fontSize": {
+            "label": "Font Size",
+            "type": "number"
+        },
+        "style.fontSizeScaling": {
+            "label": "Enable Font Scaling",
+            "type": "toggle"
+        },
+        "style.fontColor": {
+            "label": "Font Color",
+            "type": "color"
+        },
+        "style.backgroundColor": {
+            "label": "Background Color",
+            "type": "color"
+        },
+        "style.useRootVariables": {
+            "label": "Use Root CSS Variables",
+            "type": "toggle"
+        }
+    },
+
+    "state": {
+        "lastPosition": { "x": 122, "y": 187 },
+        "lastScale": 1.0
+    },
+
+    "default_state": {
+        "lastScale": 1.0
+    },
+
+    "subscriptions": {
+        "onTimeTick": false,
+        "onAppChange": false,
+        "onAudioUpdate": false,
+        "onKeybind": false
+    },
+
+    "extra": {
+        "debug": true
     }
 }

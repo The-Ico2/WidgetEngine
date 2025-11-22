@@ -42,9 +42,7 @@
     "behavior": {
         "enabled": true,
         "draggable": true,
-        
         "clickThrough": false,
-
         // Lifecycle hooks WidgetEngine will call on widget.js
         "lifecycle": {
             "onInit": true,                     // widget.js exports: init(config)
@@ -174,5 +172,9 @@
         "onAppChange": false,             // active window changed
         "onAudioUpdate": false,           // audio volume/input change
         "onKeybind": false                // special keybind events
+    },
+
+    "extra": {
+        "debug": true
     }
 }
