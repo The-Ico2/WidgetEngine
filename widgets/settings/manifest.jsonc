@@ -3,7 +3,8 @@
     "id": "settings-widget",
     "label": "Settings Widget",
     "description": "Centralized settings management",
-    "author": "Ico2",
+    "original_author": "Ico2",
+    "contributor": "",
     "version": "1.0.0",
     "required_settings": {
         "permissions": {

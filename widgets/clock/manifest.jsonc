@@ -2,7 +2,8 @@
     "name": "Clock",
     "id": "clock-widget",
     "description": "Clock Display",
-    "author": "Ico2",
+    "original_author": "Ico2",
+    "contributor": "",
     "version": "1.0.0",
     "required_settings": {
         "permissions": {

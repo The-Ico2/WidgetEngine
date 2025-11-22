@@ -2,7 +2,8 @@
     "name": "Timer",
     "id": "timer-widget",
     "description": "Simple, editable timer (countdown / count-up)",
-    "author": "Ico2",
+    "original_author": "Ico2",
+    "contributor": "",
     "version": "1.0.1",
     "required_settings": {
         "permissions": {
@@ -75,7 +76,7 @@
             "show_milliseconds": true,
             "auto_start": false,
             "count_up": false,
-            "countUp": false
+            "countUp": true
         }
     },
     "states": {
@@ -93,8 +94,8 @@
             "running": false
         },
         "saved": {
-            "running": false,
-            "remainingSeconds": 3615
+            "running": true,
+            "remainingSeconds": 3616
         }
     },
     "extra": {
