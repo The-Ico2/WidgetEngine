@@ -112,7 +112,7 @@
         if (_persistTimeout) { try { clearTimeout(_persistTimeout); } catch(e){} _persistTimeout = null; }
 
         // Reset to configured/default duration
-        remainingMs = msFromConfig(manifest.unique_config?.timer || manifest.config || config);
+        remainingMs = msFromConfig(manifest.unique_config?.timer);
         updateDisplay();
         Utils.sendMessage('debug', `[widget:${manifest.name}] Timer reset`, 3, manifest.name);
 
@@ -157,8 +157,9 @@
 
     function initWidget(manifestData, rootEl) {
         manifest = manifestData;
-        config = manifest.unique_config?.timer || manifest.unique_config || {};
-
+        config = manifest.unique_config?.timer;
+        const debug = manifest.extra?.debug.enabled;
+        
         Utils.sendMessage('debug', `Initializing Timer widget "${manifest.name}"`, 8, manifest.name);
 
         root = rootEl || document.querySelector('.timer-root');

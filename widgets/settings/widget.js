@@ -7,9 +7,8 @@
 
     function initWidget(manifestData, rootEl) {
         manifest = manifestData;
-        // Prefer explicit `config`, then nested `unique_config.style`, then `unique_config`.
-        config = manifest.config || manifest.unique_config?.style || manifest.unique_config || {};
-        const debug = manifest.extra?.debug;
+        // config = manifest.unique_config.settings;
+        const debug = manifest.extra?.debug.enabled;
 
         if (debug) Utils.sendMessage("debug", `Initializing Settings widget "${manifest.name}"`, 10, manifest.name);
 

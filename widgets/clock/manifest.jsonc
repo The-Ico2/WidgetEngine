@@ -29,16 +29,16 @@
                 "onInit": true,
                 "onDestroy": true,
                 "onSettingsUpdate": true,
-                "onFocus": true,
-                "onBlur": true,
-                "onResize": true
+                "onFocus": false,
+                "onBlur": false,
+                "onResize": false
             }
         },
         "display": {
             "position": {
-                "x": 91,
-                "y": 664,
-                "zIndex": 10
+                "x": 24,
+                "y": 15,
+                "zIndex": 100
             },
             "size": {
                 "width": 200,
@@ -48,7 +48,7 @@
             }
         },
         "styling": {
-            "useRootVariables": true,
+            "useRootVariables": false,
             "font": {
                 "family": "Arial",
                 "size": "24px",
@@ -72,10 +72,10 @@
         }
     },
     "unique_config": {
-        "style": {
+        "clock": {
             "type": "digital",
             "frame_style": "window",
-            "use_24_hour_format": false,
+            "use_24_hour_format": true,
             "show_seconds": true,
             "show_date": true,
             "date_format": "MM/DD/YYYY"
@@ -96,7 +96,10 @@
         "saved": {}
     },
     "extra": {
-        "debug": false,
+        "debug": {
+            "enabled": false,
+            "log_level": 1
+        },
         "subscriptions": {
             "on_time_tick": true,
             "on_app_change": false,
@@ -138,8 +141,5 @@
             "type": "text",
             "placeholder": "MM/DD/YYYY"
         }
-    },
-    "behavior": {
-        "enabled": false
     }
 }

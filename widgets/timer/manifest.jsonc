@@ -29,16 +29,16 @@
                 "onInit": true,
                 "onDestroy": true,
                 "onSettingsUpdate": true,
-                "onFocus": true,
-                "onBlur": true,
-                "onResize": true
+                "onFocus": false,
+                "onBlur": false,
+                "onResize": false
             }
         },
         "display": {
             "position": {
-                "x": 14,
-                "y": 16,
-                "zIndex": 10
+                "x": 60,
+                "y": 580,
+                "zIndex": 100
             },
             "size": {
                 "width": 450,
@@ -48,11 +48,12 @@
             }
         },
         "styling": {
-            "useRootVariables": true,
+            "useRootVariables": false,
             "font": {
                 "family": "Arial",
                 "size": "24px",
-                "color": "#FFFFFF"
+                "color": "#FFFFFF",
+                "widgetScaling": false
             },
             "border": {
                 "style": "solid",
@@ -74,9 +75,8 @@
         "timer": {
             "default_seconds": 300,
             "show_milliseconds": true,
-            "auto_start": false,
-            "count_up": false,
-            "countUp": true
+            "auto_start": true,
+            "countUp": false
         }
     },
     "states": {
@@ -94,8 +94,8 @@
             "running": false
         },
         "saved": {
-            "running": true,
-            "remainingSeconds": 3616
+            "running": false,
+            "remainingSeconds": 1754
         }
     },
     "extra": {

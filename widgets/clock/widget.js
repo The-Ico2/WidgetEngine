@@ -8,7 +8,7 @@
         manifest = manifestData;
         // Prefer explicit `config`, then nested `unique_config.style` (common),
         // then `unique_config` as a fallback.
-        config = manifest.config || manifest.unique_config?.style || manifest.unique_config || {};
+        config = manifest.unique_config.clock;
 
         Utils.sendMessage("debug", `Initializing Clock widget "${manifest.name}"`, 10, manifest.name);
 
@@ -63,14 +63,6 @@
 
             if (config.showDate ?? true) dateEl.textContent = Utils.formatDate(now, config);
 
-            if (manifest.extra?.debug) {
-                Utils.sendMessage(
-                    "debug",
-                    `[widget:${manifest.name}] Clock updated: ${timeEl.textContent}${config.showDate ? " | " + dateEl.textContent : ""}`,
-                    2,
-                    manifest.name
-                );
-            }
         } catch (e) {
             Utils.sendMessage("error", `Clock update failed: ${e}`, 4, manifest?.name);
         }

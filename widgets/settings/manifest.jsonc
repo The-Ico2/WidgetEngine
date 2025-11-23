@@ -1,7 +1,6 @@
 {
     "name": "Settings",
     "id": "settings-widget",
-    "label": "Settings Widget",
     "description": "Centralized settings management",
     "original_author": "Ico2",
     "contributor": "",
@@ -37,9 +36,9 @@
         },
         "display": {
             "position": {
-                "x": 31,
-                "y": 312,
-                "zIndex": 10
+                "x": 74,
+                "y": 151,
+                "zIndex": 100
             },
             "size": {
                 "width": 600,
@@ -72,22 +71,7 @@
             }
         }
     },
-    "unique_config": {
-        "style": {
-            "font": "Arial",
-            "font_size": 24,
-            "font_size_scaling": true,
-            "font_color": "#FFFFFF",
-            "type": "digital",
-            "frame_style": "window",
-            "show_seconds": true,
-            "use_24_hour_format": false,
-            "background_color": "rgba(0,0,0,0.5)",
-            "show_date": true,
-            "date_format": "MM/DD/YYYY",
-            "use_root_variables": false
-        }
-    },
+    "unique_config": {},
     "states": {
         "default": {
             "last_scale": 1.0
@@ -102,7 +86,10 @@
         "saved": {}
     },
     "extra": {
-        "debug": false,
+        "debug": {
+            "enabled": true,
+            "log_level": 1
+        },
         "subscriptions": {
             "on_time_tick": false,
             "on_app_change": false,

@@ -1228,7 +1228,7 @@ window.SettingsRenderer = (() => {
             cfgHeader.textContent = "Configuration";
             container.appendChild(cfgHeader);
 
-            const cfgRoot = manifest.config || manifest.unique_config?.style || manifest.unique_config || {};
+            const cfgRoot = manifest.unique_config || {};
             for(const [k,v] of Object.entries(cfgRoot)) {
                 container.appendChild(renderDynamicField("config",k,v));
             }
