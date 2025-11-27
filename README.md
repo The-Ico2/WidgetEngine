@@ -2,6 +2,15 @@
 
 A powerful, modular widget framework for Windows with Wallpaper Engine compatibility and overlay support. Converted from Python/Flask to C# ASP.NET Core.
 
+## ⚠️ Development status / Disclaimer
+
+- This project is actively under development.
+- The native Windows integration (setting widgets into the desktop background) is not implemented yet.
+- The Overlay engine is present in code but is not fully wired into an OS-level overlay — it is not ready for production use.
+- Only the web-based preview pages (`http://localhost:7000` and `http://localhost:7001`) reliably work at the moment.
+
+Please treat this repository as a work-in-progress; features, APIs, and on-disk formats may change.
+
 ## 🚀 Features
 
 ### ✨ Modular Widget System
@@ -13,8 +22,10 @@ A powerful, modular widget framework for Windows with Wallpaper Engine compatibi
 
 ### 🎮 Dual Rendering Modes
 
-- **Background Mode**: Wallpaper Engine compatible background rendering
-- **Overlay Mode**: Transparent, always-on-top widget overlay
+- **Background Mode**: Wallpaper Engine compatible background rendering (native integration incomplete — see Development status above)
+- **Overlay Mode**: Transparent, always-on-top widget overlay (native overlay not fully wired; web preview is available)
+
+Note: at present the native Background/Overlay engines exist in code but the supported preview experience is the web preview pages only (ports 7000/7001).
 
 ### ⚡ Core APIs
 
