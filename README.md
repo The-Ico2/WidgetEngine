@@ -498,13 +498,9 @@ Major changes from the original Python/Flask version:
 
 Widgets are self-contained - just drop new widget folders into `Widgets/` and they'll be auto-discovered!
 
-## 📄 License
-
-See the original project license in `.OLD/` folder.
-
-## 🙏 Credits
-
-Original Python version by Ico2. Converted to C# for better Windows integration and performance.
+Planned improvements:
+- Future Steam Workshop integration for easy sharing and discovery of widgets.
+- Support for an optional per-widget "install" file (custom install file) to enable one-click installs and declare dependencies or installation hints.
 
 ---
 
