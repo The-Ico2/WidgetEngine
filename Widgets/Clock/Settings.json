@@ -1,0 +1,19 @@
+{
+    "fields": [
+        { "key": "widget_features.behavior.enabled", "label": "Enabled", "type": "boolean" },
+        { "key": "widget_features.styling.useRootVariables", "label": "Use Root Variables", "type": "boolean" },
+        { "key": "widget_features.styling.font.family", "label": "Font Family", "type": "string" },
+        { "key": "widget_features.styling.font.size", "label": "Font Size", "type": "string" },
+        { "key": "widget_features.styling.font.widgetScaling", "label": "Scale Font With Widget", "type": "boolean" },
+        { "key": "widget_features.styling.border.style", "label": "Border Style", "type": "select", "options": ["none","solid","dashed","dotted"] },
+        { "key": "widget_features.styling.border.width", "label": "Border Width", "type": "number" },
+        { "key": "widget_features.styling.border.color", "label": "Border Color", "type": "color" },
+        { "key": "widget_features.styling.border.radius", "label": "Border Radius", "type": "number" },
+        { "key": "widget_features.styling.background.color", "label": "Background Color", "type": "color" },
+        { "key": "widget_features.styling.background.alpha", "label": "Background Alpha", "type": "number", "step": 0.1 },
+        { "key": "widget_features.display.size.width", "label": "Widget Width", "type": "number" },
+        { "key": "widget_features.display.size.height", "label": "Widget Height", "type": "number" },
+        { "key": "widget_features.display.size.scale", "label": "Widget Scale", "type": "number", "step": 0.1 },
+        { "key": "widget_features.behavior.draggable", "label": "Draggable", "type": "boolean" }
+    ]
+}

@@ -1,0 +1,98 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Bb]in/
+[Oo]bj/
+**/bin/
+**/obj/
+
+# Rider
+.idea/
+*.sln.iml
+
+# Visual Studio Code
+.vscode/
+.history/
+
+# NuGet
+*.nupkg
+.packages/
+project.lock.json
+.nuget/
+
+# Dotnet publish
+publish/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+*.pid
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# User secrets
+secrets.json
+appsettings.*.Local.json
+*.local
+
+# Web
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Web build output
+wwwroot/dist/
+wwwroot/build/
+
+# CefSharp / browser caches
+**/Cache/
+**/OverlayCache/
+**/BrowserCache/
+
+# JetBrains
+.idea/
+*.iml
+
+# Test results
+TestResults/
+
+# Generated files
+*.generated.cs
+
+# Logs and dumps
+*.dmp
+*.dump
+
+# Coverage
+coverage/
+*.coverage
+*.coveragexml
+
+# Editor temporary files
+*~
+*.swp
+
+# Ignore compiled API universal bundle in case it's generated
+bin/**/API/universal/*.js
+
+# Ignore local database files
+*.db
+*.sqlite
+
+# Ensure widget layer copies (manifests) remain tracked; only ignore build outputs and caches above
+
+# End of .gitignore

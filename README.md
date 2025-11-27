@@ -1,0 +1,416 @@
+# WidgetEngine - C# Edition
+
+A powerful, modular widget framework for Windows with Wallpaper Engine compatibility and overlay support. Converted from Python/Flask to C# ASP.NET Core.
+
+## 🚀 Features
+
+### ✨ Modular Widget System
+
+- Widgets automatically discovered from `Widgets/` folder
+- Hot-reload support for widget changes
+- JSON/JSONC manifest support with comments
+- Widget lifecycle management (onInit, onDestroy, onUpdate)
+
+### 🎮 Dual Rendering Modes
+
+- **Background Mode**: Wallpaper Engine compatible background rendering
+- **Overlay Mode**: Transparent, always-on-top widget overlay
+
+### ⚡ Core APIs
+
+- **WidgetManager**: Widget discovery, loading, and manifest management
+- **InputAPI**: Global keyboard shortcuts and keybinding system
+- **TimeAPI**: Time-based events (tick, second, minute)
+- **AudioAPI**: System audio monitoring and events
+- **WatcherAPI**: Real-time widget change detection
+
+### 🎯 Widget Features
+
+- Draggable and resizable widgets
+- Per-widget styling and theming
+- State persistence
+- Settings UI generation from schema
+- Event subscriptions (time, audio, keyboard)
+
+## 📁 Project Structure
+
+```bash
+WidgetEngine/
+├── API/
+│   ├── WidgetManager.cs      # Widget discovery and management
+│   ├── InputAPI.cs            # Global hotkey system
+│   ├── TimeAPI.cs             # Time event system
+│   ├── AudioAPI.cs            # Audio monitoring
+│   ├── WatcherAPI.cs          # Widget change detection
+│   └── universal/             # JavaScript utilities
+│       ├── Script.js
+│       ├── WidgetUtils.js
+│       ├── WidgetWatcher.js
+│       └── KeybindManager.js
+├── Background/
+│   └── Engine.cs              # Wallpaper Engine mode
+├── Overlay/
+│   └── Engine.cs              # Transparent overlay mode
+├── Controllers/
+│   └── WidgetController.cs    # REST API endpoints
+├── Models/
+│   └── WidgetManifest.cs      # Data models
+├── Widgets/
+│   ├── Clock/                 # Example widgets
+│   └── Timer/
+├── Program.cs                 # Application entry point
+├── appsettings.json          # Configuration
+└── WidgetEngine.csproj       # Project file
+```
+
+## 🛠️ Installation
+
+### Prerequisites
+
+- .NET 8.0 SDK or later
+- Windows OS (for overlay/background features)
+- Visual Studio 2022 or VS Code (recommended)
+
+### Setup
+
+1. **Clone or navigate to the project**
+
+   ```powershell
+   cd d:\DevProjects\WidgetEngine
+   ```
+
+2. **Restore NuGet packages**
+
+   ```powershell
+   dotnet restore
+   ```
+
+3. **Build the project**
+
+   ```powershell
+   dotnet build
+   ```
+
+4. **Run the API server**
+
+   ```powershell
+   dotnet run
+   ```
+
+The API will be available at `http://localhost:7070`. Background and Overlay engines connect to the API on this port.
+
+## 📦 Widget Development
+
+### Creating a New Widget
+
+1. Create a folder in `Widgets/YourWidget/`
+2. Add required files:
+   - `Manifest.json` - Widget configuration
+   - `widget.html` - Widget HTML structure
+   - `widget.css` - Widget styling
+   - `widget.js` - Widget logic
+   - `Settings.json` - Widget settings (optional)
+
+### Manifest.json Structure
+
+```json
+{
+  "name": "Clock",
+  "id": "clock-widget",
+  "description": "Clock Display",
+  "original_author": "Ico2",
+  "contributor": "",
+  "source": "",
+  "version": "1.0.0",
+  "required_settings": {
+    "permissions": {
+      "keyboard": false,
+      "filesystem": false,
+      "network": false,
+      "overlay": true,
+      "exclusiveHotkeys": false
+    },
+    "files": {
+      "html": "widget.html",
+      "css": "widget.css",
+      "js": "widget.js",
+      "settings": "settings.json"
+    }
+  },
+  "widget_features": {
+    "behavior": {
+      "enabled": true,
+      "draggable": true,
+      "clickThrough": false,
+      "lifecycle": {
+        "onInit": true,
+        "onDestroy": true,
+        "onSettingsUpdate": true,
+        "onFocus": false,
+        "onBlur": false,
+        "onResize": false
+      }
+    },
+    "display": {
+      "position": {
+        "x": 405,
+        "y": 409,
+        "zIndex": 100
+      },
+      "size": {
+        "width": 200,
+        "height": 100,
+        "scale": 1,
+        "resizable": true
+      }
+    },
+    "styling": {
+      "useRootVariables": false,
+      "font": {
+        "family": "Arial",
+        "size": "24px",
+        "color": "#FFFFFF",
+        "widgetScaling": false
+      },
+      "border": {
+        "style": "solid",
+        "width": "2px",
+        "color": "#FFFFFF"
+      },
+      "background": {
+        "color": "#000000",
+        "alpha": 0.2
+      },
+      "animation": {
+        "enabled": false,
+        "type": "fade-in",
+        "duration": 200
+      }
+    }
+  },
+  "unique_config": {
+    "clock": {
+      "type": "digital",
+      "frame_style": "window",
+      "use_24_hour_format": true,
+      "show_seconds": true,
+      "show_date": true,
+      "date_format": "MM/DD/YYYY"
+    }
+  },
+  "states": {
+    "default": {
+      "internal_clock_offset": 0
+    },
+    "recent": {
+      "last_position": {
+        "x": 35,
+        "y": 431
+      },
+      "last_scale": 1.0,
+      "internal_clock_offset": 0
+    },
+    "saved": {}
+  },
+  "extra": {
+    "debug": {
+      "enabled": false,
+      "log_level": 1
+    },
+    "subscriptions": {
+      "on_time_tick": true,
+      "on_app_change": false,
+      "on_audio_update": false,
+      "on_keybind": false
+    }
+  },
+  "settings_schema": {
+    "style.type": {
+      "label": "Clock Type",
+      "type": "select",
+      "options": [
+        "digital",
+        "analog"
+      ],
+      "placeholder": null,
+      "step": null
+    },
+    "style.frame_style": {
+      "label": "Frame Style",
+      "type": "select",
+      "options": [
+        "window",
+        "floating"
+      ],
+      "placeholder": null,
+      "step": null
+    },
+    "style.use_24_hour_format": {
+      "label": "Use 24h Format",
+      "type": "toggle",
+      "options": null,
+      "placeholder": null,
+      "step": null
+    },
+    "style.show_seconds": {
+      "label": "Show Seconds",
+      "type": "toggle",
+      "options": null,
+      "placeholder": null,
+      "step": null
+    },
+    "style.show_date": {
+      "label": "Show Date",
+      "type": "toggle",
+      "options": null,
+      "placeholder": null,
+      "step": null
+    },
+    "style.date_format": {
+      "label": "Date Format",
+      "type": "text",
+      "options": null,
+      "placeholder": "MM/DD/YYYY",
+      "step": null
+    }
+  }
+}
+```
+
+### Widget JavaScript Template
+
+```javascript
+(function () {
+    let root, manifest, config;
+
+    function initWidget(manifestData, rootEl) {
+        manifest = manifestData;
+        config = manifest.unique_config;
+        root = rootEl;
+
+        // Initialize your widget
+        Update.widget(root, manifest);
+    }
+
+    // Register the widget
+    window.WidgetInitRegistry = window.WidgetInitRegistry || {};
+    window.WidgetInitRegistry['MyWidget'] = initWidget;
+    window.WidgetInit = initWidget;
+})();
+```
+
+## 🔌 API Endpoints
+
+### Widget Management
+
+- `GET /api` - API information
+- `GET /api/widgets` - List all widgets
+- `GET /api/widgets/{name}` - Get widget manifest
+- `POST /api/widgets/{name}` - Update entire manifest
+- `PATCH /api/widgets/{name}` - Partial manifest update
+
+### Asset Serving
+
+- `GET /api/widgets/{name}/{file}` - Serve widget assets (layer-aware)
+
+## 🎨 Running Different Modes
+
+### API Server Only
+
+```powershell
+dotnet run
+```
+
+### Background Mode (Wallpaper Engine)
+
+Create a new console app that references WidgetEngine:
+
+```csharp
+var engine = new WidgetEngine.Background.Engine("http://localhost:7070");
+engine.Start();
+```
+
+### Overlay Mode
+
+```csharp
+var engine = new WidgetEngine.Overlay.Engine("http://localhost:7070");
+engine.Start();
+```
+
+## 🔧 Configuration
+
+Edit `appsettings.json`:
+
+```json
+{
+  "WidgetEngine": {
+    "WidgetsPath": "Widgets",
+    "Port": 7000,
+    "EnableHotReload": true
+  }
+}
+```
+
+## 📋 Widget Lifecycle
+
+1. **Discovery**: WidgetManager scans `Widgets/` folder
+2. **Loading**: Manifest parsed and validated
+3. **Initialization**: HTML/CSS/JS injected into container
+4. **Running**: Widget receives events (time, audio, keyboard)
+5. **Updates**: Changes detected by WatcherAPI
+6. **Cleanup**: onDestroy called when widget disabled
+
+## 🐛 Debugging
+
+Enable debug mode in widget manifest:
+
+```json
+{
+  "extra": {
+    "debug": {
+      "enabled": true,
+      "log_level": 1
+    }
+  }
+}
+```
+
+Or enable global debugging:
+
+```javascript
+window.DEBUG_ALL = true;
+```
+
+## 🔐 Security Notes
+
+- Widget assets are sandboxed to their folders
+- Path traversal protection enabled
+- CORS enabled for local development
+- Global hotkeys require explicit permission
+
+## 📝 Migration from Python
+
+Major changes from the original Python/Flask version:
+
+1. **Backend**: Flask → ASP.NET Core Web API
+2. **Widget API**: Python functions → C# classes with dependency injection
+3. **Manifest Loading**: JSONC-parser → Native C# with regex comment stripping
+4. **Hot Reload**: File watcher → Timer-based polling with change detection
+5. **Keybinds**: JavaScript-only → C# global hooks + JavaScript frontend
+6. **Rendering**: Direct HTML → CefSharp browser embedding
+
+## 🤝 Contributing
+
+Widgets are self-contained - just drop new widget folders into `Widgets/` and they'll be auto-discovered!
+
+## 📄 License
+
+See the original project license in `.OLD/` folder.
+
+## 🙏 Credits
+
+Original Python version by Ico2. Converted to C# for better Windows integration and performance.
+
+---
+
+**Note**: The JavaScript utilities in `API/universal/` are shared across all widgets and provide the core widget loading, updating, and event handling functionality.

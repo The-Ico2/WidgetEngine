@@ -1,0 +1,101 @@
+{
+  "name": "Settings",
+  "id": "settings-widget",
+  "description": "Centralized settings management",
+  "original_author": "Ico2",
+  "contributor": "",
+  "version": "1.0.0",
+  "required_settings": {
+    "permissions": {
+      "keyboard": false,
+      "filesystem": false,
+      "network": false,
+      "overlay": true,
+      "exclusiveHotkeys": false
+    },
+    "files": {
+      "html": "widget.html",
+      "css": "widget.css",
+      "js": "widget.js",
+      "settings": "settings.html"
+    }
+  },
+  "widget_features": {
+    "behavior": {
+      "enabled": true,
+      "draggable": true,
+      "clickThrough": false,
+      "lifecycle": {
+        "onInit": true,
+        "onDestroy": true,
+        "onSettingsUpdate": true,
+        "onFocus": false,
+        "onBlur": false,
+        "onResize": false
+      }
+    },
+    "display": {
+      "position": {
+        "x": 101,
+        "y": 394,
+        "zIndex": 100
+      },
+      "size": {
+        "width": 600,
+        "height": 300,
+        "scale": 1,
+        "resizable": true
+      }
+    },
+    "styling": {
+      "useRootVariables": true,
+      "font": {
+        "family": "Arial",
+        "size": "24px",
+        "color": "#FFFFFF",
+        "widgetScaling": true
+      },
+      "border": {
+        "style": "solid",
+        "width": "2px",
+        "color": "#FFFFFF",
+        "radius": "8px"
+      },
+      "background": {
+        "color": "#000000",
+        "alpha": 0.5
+      },
+      "animation": {
+        "enabled": false,
+        "type": "fade-in",
+        "duration": 200
+      }
+    }
+  },
+  "unique_config": {},
+  "states": {
+    "default": {
+      "last_scale": 1.0
+    },
+    "recent": {
+      "last_position": {
+        "x": 122,
+        "y": 187
+      },
+      "last_scale": 1.0
+    },
+    "saved": {}
+  },
+  "extra": {
+    "debug": {
+      "enabled": false,
+      "log_level": 1
+    },
+    "subscriptions": {
+      "on_time_tick": false,
+      "on_app_change": false,
+      "on_audio_update": false,
+      "on_keybind": false
+    }
+  }
+}

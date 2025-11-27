@@ -1,0 +1,35 @@
+{
+    "fields": [
+        {
+            "key": "widget_features.styling.useRootVariables",
+            "label": "Use Root Variables",
+            "type": "boolean"
+        },
+        {
+            "key": "widget_features.styling.font.family",
+            "label": "Font Family",
+            "type": "string"
+        },
+        {
+            "key": "widget_features.styling.font.size",
+            "label": "Font Size",
+            "type": "string"
+        },
+        {
+            "key": "widget_features.styling.border.radius",
+            "label": "Border Radius",
+            "type": "string"
+        },
+        {
+            "key": "widget_features.styling.background.color",
+            "label": "Background Color",
+            "type": "color"
+        },
+        {
+            "key": "widget_features.styling.background.alpha",
+            "label": "Background Alpha",
+            "type": "number",
+            "step": 0.1
+        }
+    ]
+}

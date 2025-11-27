@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WidgetEngine</title>
+    <link rel="stylesheet" href="./index.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        #widget-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="widget-container"></div>
+    
+    <script>
+        // Set the backend URL
+        window.BACKEND_URL = window.location.origin;
+        window.DEBUG_ALL = false; // Set to true to see all debug messages
+    </script>
+    <script>
+        // Load universal widget scripts from the backend
+        (function(){
+            const scripts = [
+                '/API/universal/WidgetUtils.js',
+                '/API/universal/WidgetWatcher.js',
+                '/API/universal/KeybindManager.js',
+                '/API/universal/Script.js'
+            ];
+
+            let loaded = 0;
+            for (const p of scripts) {
+                const s = document.createElement('script');
+                s.src = window.BACKEND_URL + p;
+                s.async = false;
+                s.onload = () => { loaded++; };
+                s.onerror = (e) => { console.error('Failed to load', p, e); };
+                document.head.appendChild(s);
+            }
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+{
+  "name": "Clock",
+  "id": "clock-widget",
+  "description": "Clock Display",
+  "original_author": "Ico2",
+  "contributor": "",
+  "version": "1.0.0",
+  "required_settings": {
+    "permissions": {
+      "keyboard": false,
+      "filesystem": false,
+      "network": false,
+      "overlay": true,
+      "exclusiveHotkeys": false
+    },
+    "files": {
+      "html": "widget.html",
+      "css": "widget.css",
+      "js": "widget.js",
+      "settings": "settings.html"
+    }
+  },
+  "widget_features": {
+    "behavior": {
+      "enabled": false,
+      "draggable": true,
+      "clickThrough": false,
+      "lifecycle": {
+        "onInit": true,
+        "onDestroy": true,
+        "onSettingsUpdate": true,
+        "onFocus": false,
+        "onBlur": false,
+        "onResize": false
+      }
+    },
+    "display": {
+      "position": {
+        "x": 83,
+        "y": 225,
+        "zIndex": 100
+      },
+      "size": {
+        "width": 200,
+        "height": 100,
+        "scale": 1,
+        "resizable": true
+      }
+    },
+    "styling": {
+      "useRootVariables": false,
+      "font": {
+        "family": "Arial",
+        "size": "24px",
+        "color": "#FFFFFF",
+        "widgetScaling": false
+      },
+      "border": {
+        "style": "solid",
+        "width": "2px",
+        "color": "#FFFFFF",
+        "radius": "8px"
+      },
+      "background": {
+        "color": "#000000",
+        "alpha": 0.2
+      },
+      "animation": {
+        "enabled": false,
+        "type": "fade-in",
+        "duration": 200
+      }
+    }
+  },
+  "unique_config": {
+    "clock": {
+      "type": "digital",
+      "frame_style": "window",
+      "use_24_hour_format": true,
+      "show_seconds": true,
+      "show_date": true,
+      "date_format": "MM/DD/YYYY"
+    }
+  },
+  "states": {
+    "default": {
+      "internal_clock_offset": 0
+    },
+    "recent": {
+      "last_position": {
+        "x": 35,
+        "y": 431
+      },
+      "last_scale": 1.0,
+      "internal_clock_offset": 0
+    },
+    "saved": {}
+  },
+  "extra": {
+    "debug": {
+      "enabled": false,
+      "log_level": 1
+    },
+    "subscriptions": {
+      "on_time_tick": true,
+      "on_app_change": false,
+      "on_audio_update": false,
+      "on_keybind": false
+    }
+  }
+}
