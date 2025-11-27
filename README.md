@@ -110,6 +110,87 @@ WidgetEngine/
 
 The API will be available at `http://localhost:7070`. Background and Overlay engines connect to the API on this port.
 
+## ✅ Quick verification and sample API calls
+
+Follow these steps to verify web previews and to exercise the per-layer enable workflow.
+
+1. Start the app (from repo root):
+
+```powershell
+dotnet run --project .\WidgetEngine.csproj
+```
+
+1. Open the web previews in a browser:
+
+- Background preview: `http://localhost:7000`
+- Overlay preview: `http://localhost:7001`
+
+1. Verify the preview knows its layer (open browser DevTools Console):
+
+```javascript
+window.WIDGET_LAYER // should be "Background" or "Overlay"
+window.BACKEND_URL  // should be "http://localhost:7070"
+```
+
+1. List discovered canonical widgets (from the backend):
+
+PowerShell:
+
+```powershell
+Invoke-RestMethod http://localhost:7070/api/widgets | ConvertTo-Json -Depth 4
+```
+
+curl:
+
+```bash
+curl http://localhost:7070/api/widgets
+```
+
+1. Check whether a layer-local manifest exists for a widget (example: `Clock` on Overlay):
+
+PowerShell:
+
+```powershell
+Invoke-RestMethod http://localhost:7070/overlay/Clock/manifest.json
+# If 404 returned the manifest does not exist in the Overlay layer yet
+```
+
+1. Enable a widget for the active layer (the preview will copy the canonical `Manifest.json` into the layer and return the resulting manifest):
+
+PowerShell (enable):
+
+```powershell
+Invoke-RestMethod -Method Post -ContentType 'application/json' -Body '{"enabled":true}' http://localhost:7070/api/layer/overlay/widgets/Clock/enable
+```
+
+curl (enable):
+
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"enabled":true}' http://localhost:7070/api/layer/overlay/widgets/Clock/enable
+```
+
+1. Confirm the manifest was copied into the layer on disk (example for Overlay):
+
+PowerShell:
+
+```powershell
+Test-Path .\Overlay\widgets\Clock\Manifest.json
+Get-Content .\Overlay\widgets\Clock\Manifest.json -Raw | ConvertFrom-Json | Select-Object -Property widget_features
+```
+
+1. Disable the widget (this updates the layer manifest to set `widget_features.behavior.enabled=false` and the frontend will remove the DOM assets):
+
+PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Post -ContentType 'application/json' -Body '{"enabled":false}' http://localhost:7070/api/layer/overlay/widgets/Clock/enable
+```
+
+1. Notes:
+
+- The Settings hub in the preview will show a widget as enabled only when the layer-local manifest exists and has `widget_features.behavior.enabled = true`.
+- The canonical `Widgets/` folder remains the source of truth for widget assets. Layer folders typically contain only `Manifest.json` copies and `widget.json` now only contains `rootVariables`.
+
 ## 📦 Widget Development
 
 ### Creating a New Widget

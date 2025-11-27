@@ -110,13 +110,11 @@ foreach ($L in $layers) {
         Write-Warning "Widgets folder not found at $widgetsRoot"
     }
 
-    # Build widget.json: rootVariables + enabled map
+    # Build widget.json: only include rootVariables (enabled state is stored per-widget Manifest.json)
     $rootVars = Get-RootCssVariables -indexCssPath $indexCss
-    $enabledMap = Build-EnabledMap -widgetsRoot $widgetsRoot
 
     $manifest = [PSCustomObject]@{
         rootVariables = $rootVars
-        enabled = $enabledMap
     }
 
     $outPath = Join-Path $targetWidgets 'widget.json'
