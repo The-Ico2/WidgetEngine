@@ -86,23 +86,26 @@ WidgetEngine/
 
 1. **Clone or navigate to the project**
 
-   ```powershell
-   cd d:\DevProjects\WidgetEngine
-   ```
+  If you don't have the repo locally, clone it:
 
-2. **Restore NuGet packages**
+  ```bash
+  git clone https://github.com/The-Ico2/WidgetEngine.git
+  cd WidgetEngine
+  ```
+
+1. **Restore NuGet packages**
 
    ```powershell
    dotnet restore
    ```
 
-3. **Build the project**
+1. **Build the project**
 
    ```powershell
    dotnet build
    ```
 
-4. **Run the API server**
+1. **Run the API server**
 
    ```powershell
    dotnet run
