@@ -27,6 +27,8 @@ Please treat this repository as a work-in-progress; features, APIs, and on-disk 
 
 Note: at present the native Background/Overlay engines exist in code but the supported preview experience is the web preview pages only (ports 7000/7001).
 
+Both Background and Overlay modes can run at the same time; they may each connect to the API concurrently and provide independent previews (Background -> `http://localhost:7000`, Overlay -> `http://localhost:7001`).
+
 ### ⚡ Core APIs
 
 - **WidgetManager**: Widget discovery, loading, and manifest management
@@ -497,8 +499,8 @@ Major changes from the original Python/Flask version:
 ## 🤝 Contributing
 
 Widgets are self-contained - just drop new widget folders into `Widgets/` and they'll be auto-discovered!
-
 Planned improvements:
+
 - Future Steam Workshop integration for easy sharing and discovery of widgets.
 - Support for an optional per-widget "install" file (custom install file) to enable one-click installs and declare dependencies or installation hints.
 
