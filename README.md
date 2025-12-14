@@ -1,6 +1,6 @@
 # WidgetEngine - C# Edition
 
-A powerful, modular widget framework for Windows with Wallpaper Engine compatibility and overlay support. Converted from Python/Flask to C# ASP.NET Core.
+A modular widget framework for Windows with Wallpaper Engine compatibility and overlay support. Converted from Python/Flask to C# ASP.NET Core.
 
 ## ⚠️ Development status / Disclaimer
 
